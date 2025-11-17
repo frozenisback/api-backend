@@ -23,11 +23,9 @@ def is_allowed_origin(origin):
     if not host:
         return False
 
-    # Allow stake.<anything>
     if host.startswith("stake."):
         return True
 
-    # Allow stake-<anything>
     if host.startswith("stake-"):
         return True
 
@@ -56,7 +54,6 @@ def api():
         "Content-Type": "application/json"
     }
 
-    # FIX: correct Heroku inference format
     payload = {
         "model": INFERENCE_MODEL_ID,
         "messages": [
@@ -66,7 +63,7 @@ def api():
 
     try:
         r = requests.post(
-            f"{INFERENCE_URL}/v1/chat/completions",  # <-- FIXED ENDPOINT
+            f"{INFERENCE_URL}/v1/chat/completions",
             json=payload,
             headers=headers,
             timeout=20
@@ -77,13 +74,26 @@ def api():
 
     data = r.json()
 
-    # Extract message
     try:
         output = data["choices"][0]["message"]["content"]
     except:
-        output = data
+        output = None
 
-    return make_response(str(output), 200)
+    try:
+        usage = data.get("usage", {}).get("completion_tokens", None)
+    except:
+        usage = None
+
+    result = {
+        "raw": {
+            "response": output,
+            "usage": {
+                "completion_tokens": usage
+            }
+        }
+    }
+
+    return jsonify(result), 200
 
 
 @app.route("/", methods=["GET"])
