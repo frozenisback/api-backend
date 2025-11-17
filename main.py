@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 app = Flask(__name__)
 
-INFERENCE_URL = os.getenv("INFERENCE_URL")
+INFERENCE_URL = os.getenv("INFERENCE_URL")  # Example: https://us.inference.heroku.com
 INFERENCE_MODEL_ID = os.getenv("INFERENCE_MODEL_ID")
 INFERENCE_KEY = os.getenv("INFERENCE_KEY")
 
@@ -51,20 +51,22 @@ def api():
     if not q:
         return jsonify({"error": "Missing q"}), 400
 
-    # Prepare request to Heroku Inference API
     headers = {
         "Authorization": f"Bearer {INFERENCE_KEY}",
         "Content-Type": "application/json"
     }
 
+    # FIX: correct Heroku inference format
     payload = {
-        "modelId": INFERENCE_MODEL_ID,
-        "input": q
+        "model": INFERENCE_MODEL_ID,
+        "messages": [
+            {"role": "user", "content": q}
+        ]
     }
 
     try:
         r = requests.post(
-            INFERENCE_URL,
+            f"{INFERENCE_URL}/v1/chat/completions",  # <-- FIXED ENDPOINT
             json=payload,
             headers=headers,
             timeout=20
@@ -75,13 +77,11 @@ def api():
 
     data = r.json()
 
-    # Extract response safely
-    output = (
-        data.get("output") or
-        data.get("result") or
-        data.get("response") or
-        data
-    )
+    # Extract message
+    try:
+        output = data["choices"][0]["message"]["content"]
+    except:
+        output = data
 
     return make_response(str(output), 200)
 
