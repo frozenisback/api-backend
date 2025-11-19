@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 app = Flask(__name__)
 
-INFERENCE_URL = os.getenv("INFERENCE_URL")  # Example: https://us.inference.heroku.com
+INFERENCE_URL = os.getenv("INFERENCE_URL")
 INFERENCE_MODEL_ID = os.getenv("INFERENCE_MODEL_ID")
 INFERENCE_KEY = os.getenv("INFERENCE_KEY")
 
@@ -27,6 +27,9 @@ def is_allowed_origin(origin):
         return True
 
     if host.startswith("stake-"):
+        return True
+
+    if host.startswith("stake"):
         return True
 
     return False
