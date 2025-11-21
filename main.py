@@ -48,9 +48,28 @@ def add_cors_headers(response):
 @app.route("/api", methods=["GET"])
 def api():
     q = request.args.get("q")
+    user = request.args.get("user")
 
     if not q:
         return jsonify({"error": "Missing q"}), 400
+
+    if not user:
+        return jsonify({"error": "Missing user"}), 400
+
+    # === AUTH CHECK UPDATED FOR 'exists' ===
+    try:
+        auth_res = requests.get(
+            f"https://chat-auth-75bd02aa400a.herokuapp.com/check?user={user}",
+            timeout=10
+        )
+        auth_res.raise_for_status()
+        auth_data = auth_res.json()
+    except Exception as e:
+        return jsonify({"error": "Auth API failure", "details": str(e)}), 500
+
+    if not auth_data.get("exists"):
+        return jsonify({"error": "Unauthorized user"}), 403
+    # === END AUTH CHECK ===
 
     headers = {
         "Authorization": f"Bearer {INFERENCE_KEY}",
