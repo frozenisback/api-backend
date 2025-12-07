@@ -2,6 +2,8 @@ import os
 import random
 import requests
 import logging
+import json
+import re
 from flask import Flask, request, jsonify
 from urllib.parse import urlparse, quote
 
@@ -48,7 +50,7 @@ Sometimes be casual: "kya scene hai bhai log"
 Occasionally use very short 1-2 word messages like "sahi ha", "nicee", "lol", "hanji" to sound human.
 """
 
-# 1. Context Analysis Prompt
+# 1. Context Analysis Prompt (FIXED: escaped braces)
 ANALYSIS_PROMPT = """
 You are analyzing a casino chat to understand the social dynamics.
 Your username is {username}.
@@ -59,7 +61,10 @@ Based on these recent chat messages:
 And your bot's recent messages:
 {bot_messages}
 
-Please provide a JSON response with the following structure:
+IMPORTANT: ONLY RETURN A SINGLE VALID JSON OBJECT. DO NOT INCLUDE ANY MARKDOWN, CODE-FENCES (```), OR ANY EXPLANATORY TEXT.
+START IMMEDIATELY WITH THE JSON OBJECT (the very first character MUST be '{{').
+
+Your JSON must match this structure exactly:
 {{
   "vibe": "dead|slow|active|chaotic|tilt|happy|argument|flex|bonus-wait",
   "topics": "brief summary of main topics being discussed",
@@ -74,7 +79,8 @@ Please provide a JSON response with the following structure:
   "contextMemoryBlob": "max 200 character compressed memory of the current chat state"
 }}
 
-Focus on accuracy and brevity. Only return valid JSON.
+Focus on accuracy and brevity.
+ONLY return valid JSON.
 """
 
 # 2. Inactivity Prompt
@@ -350,7 +356,6 @@ def api():
         return jsonify({"error": "Invalid action"}), 400
 
 
-    # === INFERENCE CALL ===
     headers = {
         "Authorization": f"Bearer {INFERENCE_KEY}",
         "Content-Type": "application/json"
@@ -379,9 +384,8 @@ def api():
         output = ai_data["choices"][0]["message"]["content"]
 
         output = output.strip()
-        output = output.replace("As an AI", "").replace("I'm an AI", "").replace("I am an AI", "")
+        output = re.sub(r"^(As an AI|I'm an AI|I am an AI).*?\s*", "", output, flags=re.I)
 
-        import re
         output = re.sub(r'@\(([^)]+)\)', r'@\1', output)
 
         if len(output) > 200:
