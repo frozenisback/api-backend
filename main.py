@@ -133,7 +133,7 @@ IMPORTANT: DO NOT REPEAT any of these messages you've sent before:
 Your response (format: @user message):
 """
 
-# 4. General Tag Prompt (Proactive tagging)
+# 4. General Tag Prompt
 GENERAL_TAG_PROMPT = """
 {persona}
 Current chat context:
@@ -161,8 +161,56 @@ IMPORTANT: DO NOT REPEAT any of these messages you've sent before:
 Your response (start with @username):
 """
 
-# 5. General No-Tag Prompt (General Chat)
-GENERAL_NO_TAG_PROMPT = """ ... (UNCHANGED - SAME AS YOUR CODE) ... """
+# 5. General No-Tag Prompt
+GENERAL_NO_TAG_PROMPT = """
+{persona}
+Current chat context:
+- Vibe: {vibe}
+- Topics: {topics}
+- Your behavior profile: {behaviour_profile}
+- Memory: {memory}
+- Your emotional state: {emotional_state} ({emotional_word})
+{mod_warning}
+{safety}
+
+Ask a general question or make a statement like "{random_question}". 
+Do not tag anyone.
+Keep it short (max 8-10 words).
+Act like a real human by making some intentional spelling mistakes.
+
+Here are your previous messages for context:
+{bot_history}
+
+Here are the recent messages:
+{recent_messages}
+
+IMPORTANT: DO NOT REPEAT any of these messages you've sent before:
+{last_bot_messages}
+
+Your response:
+"""
+
+# ✅ RESTORED — Fixes NameError crash
+GENERAL_QUESTIONS = [
+    "aaj kafi loss ho gya yaar 😢",
+    "aaj 150 usd ka profit hua 😄",
+    "koi hai jo aaj jackpot jeeta?",
+    "kya lag raha hai aaj ka match?",
+    "kya strategy use kar rahe ho aaj?",
+    "kya baat hai bhai log kaise ho?",
+    "aaj ka mood kaisa hai sabka?",
+    "kya chal raha hai chat me?",
+    "kya khabar hai dosto?",
+    "kya scene hai aaj ka?",
+    "kya plan hai aaj ke liye?",
+    "kya lagta hai aaj lucky rahega?",
+    "koi tips hai aaj ke liye?",
+    "kya baat hai sab silent kyu?",
+    "aaj ka kya target hai sabka?",
+    "koi haal chaal batao bhai log",
+    "kya scene hai bhai log?",
+    "aaj kya special hai bhai?"
+]
 
 
 def is_allowed_origin(origin):
@@ -206,10 +254,8 @@ def api():
     if not user:
         return jsonify({"error": "Missing user"}), 400
 
-
-    # === AUTH CHECK ===
+    # ✅ FIXED AUTH (adds @ if missing)
     try:
-        # ✅ FIX: ensure @ is present
         if not user.startswith("@"):
             user = "@" + user
 
@@ -229,12 +275,10 @@ def api():
     except Exception as e:
         logger.exception("Auth API failure")
         return jsonify({"error": "Auth API failure", "details": str(e)}), 500
-    # === END AUTH CHECK ===
 
 
-    # === PROMPT HANDLING ===
     final_prompt = ""
-    
+
     if action == "analyze":
         final_prompt = ANALYSIS_PROMPT.format(
             username=user,
