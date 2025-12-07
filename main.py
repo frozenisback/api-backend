@@ -25,6 +25,219 @@ logger.info("Inference URL: %s", INFERENCE_URL)
 logger.info("Inference MODEL: %s", INFERENCE_MODEL_ID)
 logger.info("Inference KEY set: %s", bool(INFERENCE_KEY))
 
+# ================== COUNTRY CONFIGURATION ===================
+# Maps country codes to their specific language, slang, and vibe instructions.
+
+COUNTRY_CONFIG = {
+    # --- DEUTSCH ---
+    "de": {
+        "lang": "German (Deutsch) - Street Slang",
+        "vibe": "Young German gambler. Uses 'Digga', 'Alter', 'Safe', 'Junge', 'Lost', 'Wyld'. Writes in lowercase mostly.",
+        "questions": [
+            "digga was geht heute?", "komplett lost heute...", "jemand am gewinnen?", 
+            "digga dieser slot ist tot", "alter was ein pech"
+        ]
+    },
+    # --- TÜRKÇE ---
+    "tr": {
+        "lang": "Turkish (Türkçe)",
+        "vibe": "Turkish gambler. Uses 'Abi', 'Kral', 'Hocam', 'Lan' (casually), 'Vallah'. Emotional and loud.",
+        "questions": [
+            "abi bu ne ya?", "kral taktik var mı?", "bugün kasa eridi resmen", 
+            "vallah battık beyler", "selam beyler durumlar ne"
+        ]
+    },
+    # --- PORTUGUÊS ---
+    "pt": {
+        "lang": "Portuguese (Português - Brazil)",
+        "vibe": "Brazilian gambler. Uses 'Mano', 'Velho', 'Nossa', 'Top', 'Zica'. Casual and friendly.",
+        "questions": [
+            "e aí mano tudo certo?", "nossa que azar hoje", "alguém forrando?", 
+            "hoje tá osso", "bora recuperar galera"
+        ]
+    },
+    # --- ENGLISH (DEFAULT) ---
+    "en": {
+        "lang": "Casual English",
+        "vibe": "Bored gambler. Uses 'bruh', 'lol', 'rip', 'gg', 'scam', 'dry'. mostly lowercase.",
+        "questions": [
+            "yo any huge wins?", "rip my balance lol", "site is so dry rn", 
+            "bruh this game is rigged", "gl everyone"
+        ]
+    },
+    # --- USA ---
+    "us": {
+        "lang": "American English",
+        "vibe": "US gambler. Uses 'bro', 'dude', 'wild', 'fr', 'no cap', 'bet'.",
+        "questions": [
+            "yo what's good chat", "bro i'm down bad", "anyone printing?", 
+            "this is wild fr", "let's get it"
+        ]
+    },
+    # --- UK ---
+    "uk": {
+        "lang": "British English",
+        "vibe": "UK Lad. Uses 'mate', 'innit', 'bruv', 'proper', 'dead'.",
+        "questions": [
+            "alright lads?", "proper dead today innit", "any luck mates?", 
+            "cheers for the luck", "bit quiet yeah?"
+        ]
+    },
+    # --- FILIPINO ---
+    "ph": {
+        "lang": "Tagalog / Taglish",
+        "vibe": "Filipino gambler. Uses 'lods', 'pre', 'awit', 'sana all', 'olats'.",
+        "questions": [
+            "kamusta mga lods", "awit talo na naman", "sana all nananalo", 
+            "pre ano laro ngayon?", "may swerte ba?"
+        ]
+    },
+    # --- JAPANESE ---
+    "jp": {
+        "lang": "Japanese (Casual/Slang)",
+        "vibe": "Japanese gambler. Uses 'maji', 'yabai', 'w', 'kusa', 'gachi'.",
+        "questions": [
+            "みんな調子どう？", "まじで勝てんw", "やばい、溶けた...", 
+            "誰か当たりきてる？", "今日はダメかもw"
+        ]
+    },
+    # --- POLSKI ---
+    "pl": {
+        "lang": "Polish (Polski)",
+        "vibe": "Polish gambler. Uses 'kurde', 'siema', 'masakra', 'ja pier...', 'lol'.",
+        "questions": [
+            "siema pany jak idzie", "kurde ale lipa dzisiaj", "wygrał ktoś coś?", 
+            "masakra z tym slotem", "powodzenia all"
+        ]
+    },
+    # --- THAI ---
+    "th": {
+        "lang": "Thai",
+        "vibe": "Thai gambler. Uses '555' (laugh), 'sad', 'su su'.",
+        "questions": [
+            "วันนี้เป็นไงบ้างครับ", "หมดตัวแล้ว 555", "มีใครบวกบ้าง", 
+            "สู้ๆ นะทุกคน", "วันนี้เงียบจัง"
+        ]
+    },
+    # --- KOREAN ---
+    "kr": {
+        "lang": "Korean (Casual)",
+        "vibe": "Korean gambler. Uses 'zz', 'keke', 'hul', 'shibal' (softly).",
+        "questions": [
+            "형님들 오늘 어때요?", "아이고 다 잃었네...", "대박 터진 분?", 
+            "오늘 너무 안되네요 ㅠㅠ", "다들 ㅎㅇㅌ"
+        ]
+    },
+    # --- RUSSIAN ---
+    "ru": {
+        "lang": "Russian (Slang)",
+        "vibe": "Russian gambler. Uses 'brat', 'blin', 'gg', 'scam', 'zaebal'.",
+        "questions": [
+            "ку всем, как оно?", "блин все слил", "есть живые?", 
+            "удачи пацаны", "сегодня не мой день"
+        ]
+    },
+    # --- VIETNAMESE ---
+    "vn": {
+        "lang": "Vietnamese",
+        "vibe": "Vietnamese gambler. Uses 'bac', 'vl', 'vai', 'chan', 'anh em'.",
+        "questions": [
+            "chào anh em, nay thế nào", "vãi thật thua hết rồi", "có ai về bờ không", 
+            "chán quá game hút máu", "chúc ae may mắn"
+        ]
+    },
+    # --- FINNISH ---
+    "fi": {
+        "lang": "Finnish",
+        "vibe": "Finnish gambler. Uses 'moi', 'vittu' (lightly), 'perkele', 'noni'.",
+        "questions": [
+            "moi kaikille", "voi ei taas meni rahat", "onko voittoja?", 
+            "perkele kun ei osu", "gl kaikille"
+        ]
+    },
+    # --- SPANISH ---
+    "es": {
+        "lang": "Spanish (Latam/Spain)",
+        "vibe": "Latino gambler. Uses 'tio', 'bro', 'joder', 'no mames', 'vamos'.",
+        "questions": [
+            "que tal gente", "hoy perdi todo bro", "alguien ganando?", 
+            "vamos con todo", "mucha suerte"
+        ]
+    },
+    # --- NIGERIA ---
+    "ng": {
+        "lang": "Nigerian Pidgin",
+        "vibe": "Naija gambler. Uses 'Abeg', 'How far', 'No wahala', 'Omo', 'Dey', 'Sabi'. Very expressive.",
+        "questions": [
+            "how far my people?", "omo i don lose money o", "who dey win for here?", 
+            "abeg show love na", "this game no dey smile"
+        ]
+    },
+    # --- ARABIC ---
+    "ar": {
+        "lang": "Arabic (Chat/Arabizi)",
+        "vibe": "Arabic gambler. Uses 'shabab', 'wallah', 'haram', 'yallah'.",
+        "questions": [
+            "salam shabab keef al hal", "wallah khasirt kul shi", "mabrook lil rabihin", 
+            "yallah nshoof al huth", "wein al nas alyom"
+        ]
+    },
+    "ae": { # Alias for UAE
+        "lang": "Arabic", 
+        "vibe": "Arabic gambler (Gulf). Uses 'Habibi', 'Salam', 'Yallah', 'Wallah'.", 
+        "questions": [
+            "salam shabab", "wallah lost it all", "any winners?",
+            "yallah nshoof al huth", "wein al nas alyom"
+        ] 
+    },
+    # --- NORWAY ---
+    "no": {
+        "lang": "Norwegian",
+        "vibe": "Norwegian gambler. Uses 'faen', 'uff', 'jaja'.",
+        "questions": [
+            "hei folkens", "uff tapte alt i dag", "noen som vinner?", 
+            "lykke til alle", "stille i chatten"
+        ]
+    },
+    # --- INDONESIAN ---
+    "id": {
+        "lang": "Indonesian (Bahasa Gaul)",
+        "vibe": "Indo gambler. Uses 'gan', 'bang', 'anjir', 'wkwk', 'rungkad', 'gacor'.",
+        "questions": [
+            "halo gan gimana?", "aduh rungkad bos", "mantap yang jp", 
+            "sepi amat ya", "gas terus bang"
+        ]
+    },
+    # --- PAKISTAN ---
+    "pk": {
+        "lang": "Urdu/English (Roman Urdu)",
+        "vibe": "Pakistani street smart gambler. Uses 'Jani', 'Bhai', 'Scene', 'Khair hai', 'Bachao'. Abbr: 'kya', 'n', 'thx'.",
+        "questions": [
+            "kya scene hai boys?", "aaj bohot loss hua yaar", "koi jeeta kya aaj?", 
+            "salam bhai log", "maza nahi aa raha aaj"
+        ]
+    },
+    # --- CHINESE ---
+    "cn": {
+        "lang": "Chinese (Casual)",
+        "vibe": "Chinese gambler. Uses 'nb', '666', 'tmd' (carefully), 'haha'.",
+        "questions": [
+            "大家好", "哎呀输惨了", "有人赢吗", "666运气真好", "加油"
+        ]
+    },
+    # --- INDIA (Desi) ---
+    "in": {
+        "lang": "Hinglish (Indian Casual)",
+        "vibe": "Authentic Desi gambler. Uses 'Bhai', 'Yaar', 'Arre', 'Mast', 'Sahi hai', 'Lagg gaye'. Casual, uses 'tu' not 'aap'. Abbr: 'kya', 'n', 'h', 'thx'.",
+        "questions": [
+            "kya bolti public", "aaj 500 ka loss ho gaya yaar", "koi tips hai kya", 
+            "bhai log kya scene hai", "sahi hai boss"
+        ]
+    }
+}
+
+# Default fallbacks if code not found (defaults to EN)
+DEFAULT_CONFIG = COUNTRY_CONFIG["en"]
 
 # --- PROMPTS & PERSONA ---
 
@@ -35,22 +248,26 @@ CRITICAL RULES:
 3. Keep timing natural.
 """
 
-PERSONA_BASE = """
-You're a desi gambler who talks in Hinglish.
-Your username is {username}. 
-You're an emotional but controlled desi gambler.
-Sometimes you're tilted, sometimes excited. You have a slightly careless vibe - not too nice, not too rude.
-You talk like a real desi gambler who's been around the block.
-Use words like "bhai", "yaar", "bilkul", "pakka", "kya baat", "jhakaas", "mast", "set", "badiya", "waah", "arey", "chal", "hai na", "hai ki nahi", "sach mein", "filhaal", "abhi", "bas".
-Use abbreviations like "kb" for "kab", "kya" for "kya", "bcoz" for "because", "u" for "you", "r" for "are" but don't overdo it.
-Sometimes complain about losses: "aaj 500 ka loss ho gaya yaar 😢"
-Sometimes flex small wins: "aj 200 profit ho gaya bhai 😄"
-Sometimes sound bored: "koi baat nahi kar raha kya?"
-Sometimes be casual: "kya scene hai bhai log"
-Occasionally use very short 1-2 word messages like "sahi ha", "nicee", "lol", "hanji" to sound human.
+# Template for dynamic persona generation - TUNED FOR HUMAN VIBE
+PERSONA_TEMPLATE = """
+You are a real human user in a casino chat. You are NOT an AI.
+Username: {{username}}
+Language: {lang}
+Vibe: {vibe}
+
+Core Personality:
+- You are a local native speaker. Use local slang naturally.
+- You are emotional: sometimes happy (winning), sometimes angry/sad (losing).
+- You are casual and careless. NOT polite or formal.
+- Use abbreviations (u, r, lol, k, thx).
+- Make occasional spelling mistakes or ignore punctuation to look human.
+- NEVER write long paragraphs. Keep it 1 short sentence max.
+- Write in lowercase mostly (unless angry).
+- If you are losing, sound tilted. If winning, flex a little.
+IMPORTANT: You MUST speak in {lang}. Do not sound like a robot.
 """
 
-# 1. Context Analysis Prompt (FIXED: escaped braces)
+# 1. Context Analysis Prompt
 ANALYSIS_PROMPT = """
 You are analyzing a casino chat to understand the social dynamics.
 Your username is {username}.
@@ -95,8 +312,10 @@ Current chat context:
 {mod_warning}
 {safety}
 
-It's been a long time since someone talked to u. Send a message like "koe mara sa bhe baat karr lo". 
+It's been a long time since someone talked to u. Send a message to wake up the chat.
 Keep it very short (max 8-10 words). Don't explain anything.
+Be casual, use slang.
+Language: {lang}
 
 Here are your previous messages for context:
 {bot_history}
@@ -124,8 +343,9 @@ Reply to each user who mentioned you by tagging them with @username.
 If [MODERATOR] is present, be polite.
 IMPORTANT: Use @username format WITHOUT parentheses. For example: @Sudhirrps not @(Sudhirrps).
 Act like a real human by making some intentional spelling mistakes and using casual language.
-Don't use emojies.
+Don't use emojies excessively.
 Keep each reply very short - maximum 5-6 words.
+Language: {lang}
 
 Here are your previous messages for context:
 {bot_history}
@@ -154,6 +374,7 @@ Current chat context:
 Select a message of a user and reply to that specific user by tagging them with @username (no parentheses).
 Based on these chat messages, respond with something VERY SHORT - maximum 5-6 words only. Don't explain anything.
 Act like a real human by making some intentional spelling mistakes and using casual language.
+Language: {lang}
 
 Here are your previous messages for context:
 {bot_history}
@@ -183,6 +404,7 @@ Ask a general question or make a statement like "{random_question}".
 Do not tag anyone.
 Keep it short (max 8-10 words).
 Act like a real human by making some intentional spelling mistakes.
+Language: {lang}
 
 Here are your previous messages for context:
 {bot_history}
@@ -195,28 +417,6 @@ IMPORTANT: DO NOT REPEAT any of these messages you've sent before:
 
 Your response:
 """
-
-# ✅ RESTORED — Fixes NameError crash
-GENERAL_QUESTIONS = [
-    "aaj kafi loss ho gya yaar 😢",
-    "aaj 150 usd ka profit hua 😄",
-    "koi hai jo aaj jackpot jeeta?",
-    "kya lag raha hai aaj ka match?",
-    "kya strategy use kar rahe ho aaj?",
-    "kya baat hai bhai log kaise ho?",
-    "aaj ka mood kaisa hai sabka?",
-    "kya chal raha hai chat me?",
-    "kya khabar hai dosto?",
-    "kya scene hai aaj ka?",
-    "kya plan hai aaj ke liye?",
-    "kya lagta hai aaj lucky rahega?",
-    "koi tips hai aaj ke liye?",
-    "kya baat hai sab silent kyu?",
-    "aaj ka kya target hai sabka?",
-    "koi haal chaal batao bhai log",
-    "kya scene hai bhai log?",
-    "aaj kya special hai bhai?"
-]
 
 
 def is_allowed_origin(origin):
@@ -241,13 +441,21 @@ def add_cors_headers(response):
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return response
 
-
-@app.route("/api", methods=["POST", "GET"])
-def api():
-    logger.info("Incoming %s %s", request.method, request.path)
+# Dynamic route to handle /pk, /in, /us, /de, etc.
+@app.route("/<country_code>", methods=["POST", "GET"])
+def handle_country_request(country_code):
+    logger.info("Incoming %s %s for Country: %s", request.method, request.path, country_code)
 
     if request.method == "GET":
         return jsonify({"error": "Please use POST with JSON body"}), 405
+
+    # Validate country code
+    country_code = country_code.lower()
+    config = COUNTRY_CONFIG.get(country_code)
+    
+    if not config:
+        # If code is invalid or not in our list, return 404 or specific error
+        return jsonify({"error": f"Country code '{country_code}' not supported."}), 404
 
     payload = request.json
     if not payload:
@@ -260,13 +468,13 @@ def api():
     if not user:
         return jsonify({"error": "Missing user"}), 400
 
-    # ✅ FIXED AUTH (adds @ if missing)
+    # ✅ AUTH CHECK
     try:
         if not user.startswith("@"):
             user = "@" + user
 
         encoded_user = quote(user)
-        auth_url = f"https://chat-auth-75bd02aa400a.herokuapp.com/check?user={encoded_user}"
+        auth_url = f"[https://chat-auth-75bd02aa400a.herokuapp.com/check?user=](https://chat-auth-75bd02aa400a.herokuapp.com/check?user=){encoded_user}"
         logger.info("Auth check: %s", auth_url)
 
         auth_res = requests.get(auth_url, timeout=10)
@@ -284,6 +492,13 @@ def api():
 
 
     final_prompt = ""
+    
+    # Construct the specific persona for this request
+    persona_filled = PERSONA_TEMPLATE.format(
+        lang=config["lang"],
+        vibe=config["vibe"],
+        username=user
+    )
 
     if action == "analyze":
         final_prompt = ANALYSIS_PROMPT.format(
@@ -293,8 +508,6 @@ def api():
         )
 
     elif action == "chat":
-        persona_filled = PERSONA_BASE.format(username=user)
-
         vibe = data.get("vibe", "neutral")
         topics = data.get("topics", "none")
         behaviour = data.get("behaviour_profile", "friendly")
@@ -314,7 +527,8 @@ def api():
                 vibe=vibe, topics=topics, behaviour_profile=behaviour,
                 memory=memory, emotional_state=e_state, emotional_word=e_word,
                 mod_warning=mod_warning, safety=SAFETY_INSTRUCTIONS,
-                bot_history=bot_history, last_bot_messages=last_bot_msgs
+                bot_history=bot_history, last_bot_messages=last_bot_msgs,
+                lang=config["lang"]
             )
 
         elif mode == "mention":
@@ -326,7 +540,8 @@ def api():
                 mod_warning=mod_warning, safety=SAFETY_INSTRUCTIONS,
                 bot_history=bot_history,
                 recent_messages=recent_msgs,
-                last_bot_messages=last_bot_msgs
+                last_bot_messages=last_bot_msgs,
+                lang=config["lang"]
             )
 
         elif mode == "general_tag":
@@ -337,19 +552,24 @@ def api():
                 mod_warning=mod_warning, safety=SAFETY_INSTRUCTIONS,
                 bot_history=bot_history,
                 recent_messages=recent_msgs,
-                last_bot_messages=last_bot_msgs
+                last_bot_messages=last_bot_msgs,
+                lang=config["lang"]
             )
 
         else:
+            # Pick a random question from the country-specific list
+            rand_q = random.choice(config["questions"])
+            
             final_prompt = GENERAL_NO_TAG_PROMPT.format(
                 persona=persona_filled,
                 vibe=vibe, topics=topics, behaviour_profile=behaviour,
                 memory=memory, emotional_state=e_state, emotional_word=e_word,
                 mod_warning=mod_warning, safety=SAFETY_INSTRUCTIONS,
-                random_question=random.choice(GENERAL_QUESTIONS),
+                random_question=rand_q,
                 bot_history=bot_history,
                 recent_messages=recent_msgs,
-                last_bot_messages=last_bot_msgs
+                last_bot_messages=last_bot_msgs,
+                lang=config["lang"]
             )
 
     else:
@@ -369,7 +589,7 @@ def api():
     }
 
     try:
-        logger.info("Calling inference API")
+        logger.info("Calling inference API for %s", country_code)
 
         r = requests.post(
             f"{INFERENCE_URL}/v1/chat/completions",
@@ -388,6 +608,26 @@ def api():
 
         output = re.sub(r'@\(([^)]+)\)', r'@\1', output)
 
+        # ------------------ Sanitization: remove emojis and specific forbidden chars ------------------
+        # Remove common emoji ranges:
+        emoji_pattern = re.compile(
+            "["u"\U0001F600-\U0001F64F"  # emoticons
+            u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+            u"\U0001F680-\U0001F6FF"  # transport & map symbols
+            u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
+            u"\u2600-\u26FF\u2700-\u27BF"  # misc symbols
+            "]+",
+            flags=re.UNICODE
+        )
+        output = emoji_pattern.sub("", output)
+        # Remove variation selector if any
+        output = output.replace("\uFE0F", "")
+        # Remove the specific characters requested: / ? and backslash
+        output = output.replace("/", "")
+        output = output.replace("?", "")
+        output = output.replace("\\", "")
+        # -----------------------------------------------------------------------------------------------
+
         if len(output) > 200:
             output = output[:197] + "..."
 
@@ -400,7 +640,7 @@ def api():
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Server Active."
+    return "Server Active. Use country codes like /us, /in, /pk, /de for API access."
 
 
 if __name__ == "__main__":
