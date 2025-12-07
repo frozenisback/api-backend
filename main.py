@@ -163,9 +163,7 @@ Your response (start with @username):
 
 # 5. General No-Tag Prompt (General Chat)
 GENERAL_NO_TAG_PROMPT = """ ... (UNCHANGED - SAME AS YOUR CODE) ... """
-# (All prompt content and business logic remains unchanged exactly as in your original.)
 
-# ===== Everything below is IDENTICAL except logs added in auth + inference blocks =====
 
 def is_allowed_origin(origin):
     if not origin:
@@ -208,8 +206,13 @@ def api():
     if not user:
         return jsonify({"error": "Missing user"}), 400
 
+
     # === AUTH CHECK ===
     try:
+        # ✅ FIX: ensure @ is present
+        if not user.startswith("@"):
+            user = "@" + user
+
         encoded_user = quote(user)
         auth_url = f"https://chat-auth-75bd02aa400a.herokuapp.com/check?user={encoded_user}"
         logger.info("Auth check: %s", auth_url)
@@ -226,9 +229,12 @@ def api():
     except Exception as e:
         logger.exception("Auth API failure")
         return jsonify({"error": "Auth API failure", "details": str(e)}), 500
+    # === END AUTH CHECK ===
+
 
     # === PROMPT HANDLING ===
     final_prompt = ""
+    
     if action == "analyze":
         final_prompt = ANALYSIS_PROMPT.format(
             username=user,
@@ -237,8 +243,8 @@ def api():
         )
 
     elif action == "chat":
-        # Prompt handling identical to your original — no modifications
         persona_filled = PERSONA_BASE.format(username=user)
+
         vibe = data.get("vibe", "neutral")
         topics = data.get("topics", "none")
         behaviour = data.get("behaviour_profile", "friendly")
@@ -283,6 +289,7 @@ def api():
                 recent_messages=recent_msgs,
                 last_bot_messages=last_bot_msgs
             )
+
         else:
             final_prompt = GENERAL_NO_TAG_PROMPT.format(
                 persona=persona_filled,
@@ -314,12 +321,14 @@ def api():
 
     try:
         logger.info("Calling inference API")
+
         r = requests.post(
             f"{INFERENCE_URL}/v1/chat/completions",
             json=ai_payload,
             headers=headers,
             timeout=20
         )
+
         r.raise_for_status()
 
         ai_data = r.json()
