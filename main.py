@@ -26,10 +26,7 @@ logger.info("Inference MODEL: %s", INFERENCE_MODEL_ID)
 logger.info("Inference KEY set: %s", bool(INFERENCE_KEY))
 
 # ================== COUNTRY CONFIGURATION ===================
-# Maps country codes to their specific language, slang, and vibe instructions.
-
 COUNTRY_CONFIG = {
-    # --- DEUTSCH ---
     "de": {
         "lang": "German (Deutsch) - Street Slang",
         "vibe": "Young German gambler. Uses 'Digga', 'Alter', 'Safe', 'Junge', 'Lost', 'Wyld'. Writes in lowercase mostly.",
@@ -38,7 +35,6 @@ COUNTRY_CONFIG = {
             "digga dieser slot ist tot", "alter was ein pech"
         ]
     },
-    # --- TÜRKÇE ---
     "tr": {
         "lang": "Turkish (Türkçe)",
         "vibe": "Turkish gambler. Uses 'Abi', 'Kral', 'Hocam', 'Lan' (casually), 'Vallah'. Emotional and loud.",
@@ -47,7 +43,6 @@ COUNTRY_CONFIG = {
             "vallah battık beyler", "selam beyler durumlar ne"
         ]
     },
-    # --- PORTUGUÊS ---
     "pt": {
         "lang": "Portuguese (Português - Brazil)",
         "vibe": "Brazilian gambler. Uses 'Mano', 'Velho', 'Nossa', 'Top', 'Zica'. Casual and friendly.",
@@ -56,7 +51,6 @@ COUNTRY_CONFIG = {
             "hoje tá osso", "bora recuperar galera"
         ]
     },
-    # --- ENGLISH (DEFAULT) ---
     "en": {
         "lang": "Casual English",
         "vibe": "Bored gambler. Uses 'bruh', 'lol', 'rip', 'gg', 'scam', 'dry'. mostly lowercase.",
@@ -65,7 +59,6 @@ COUNTRY_CONFIG = {
             "bruh this game is rigged", "gl everyone"
         ]
     },
-    # --- USA ---
     "us": {
         "lang": "American English",
         "vibe": "US gambler. Uses 'bro', 'dude', 'wild', 'fr', 'no cap', 'bet'.",
@@ -74,7 +67,6 @@ COUNTRY_CONFIG = {
             "this is wild fr", "let's get it"
         ]
     },
-    # --- UK ---
     "uk": {
         "lang": "British English",
         "vibe": "UK Lad. Uses 'mate', 'innit', 'bruv', 'proper', 'dead'.",
@@ -83,7 +75,6 @@ COUNTRY_CONFIG = {
             "cheers for the luck", "bit quiet yeah?"
         ]
     },
-    # --- FILIPINO ---
     "ph": {
         "lang": "Tagalog / Taglish",
         "vibe": "Filipino gambler. Uses 'lods', 'pre', 'awit', 'sana all', 'olats'.",
@@ -92,7 +83,6 @@ COUNTRY_CONFIG = {
             "pre ano laro ngayon?", "may swerte ba?"
         ]
     },
-    # --- JAPANESE ---
     "jp": {
         "lang": "Japanese (Casual/Slang)",
         "vibe": "Japanese gambler. Uses 'maji', 'yabai', 'w', 'kusa', 'gachi'.",
@@ -101,7 +91,6 @@ COUNTRY_CONFIG = {
             "誰か当たりきてる？", "今日はダメかもw"
         ]
     },
-    # --- POLSKI ---
     "pl": {
         "lang": "Polish (Polski)",
         "vibe": "Polish gambler. Uses 'kurde', 'siema', 'masakra', 'ja pier...', 'lol'.",
@@ -110,7 +99,6 @@ COUNTRY_CONFIG = {
             "masakra z tym slotem", "powodzenia all"
         ]
     },
-    # --- THAI ---
     "th": {
         "lang": "Thai",
         "vibe": "Thai gambler. Uses '555' (laugh), 'sad', 'su su'.",
@@ -119,7 +107,6 @@ COUNTRY_CONFIG = {
             "สู้ๆ นะทุกคน", "วันนี้เงียบจัง"
         ]
     },
-    # --- KOREAN ---
     "kr": {
         "lang": "Korean (Casual)",
         "vibe": "Korean gambler. Uses 'zz', 'keke', 'hul', 'shibal' (softly).",
@@ -128,7 +115,6 @@ COUNTRY_CONFIG = {
             "오늘 너무 안되네요 ㅠㅠ", "다들 ㅎㅇㅌ"
         ]
     },
-    # --- RUSSIAN ---
     "ru": {
         "lang": "Russian (Slang)",
         "vibe": "Russian gambler. Uses 'brat', 'blin', 'gg', 'scam', 'zaebal'.",
@@ -137,7 +123,6 @@ COUNTRY_CONFIG = {
             "удачи пацаны", "сегодня не мой день"
         ]
     },
-    # --- VIETNAMESE ---
     "vn": {
         "lang": "Vietnamese",
         "vibe": "Vietnamese gambler. Uses 'bac', 'vl', 'vai', 'chan', 'anh em'.",
@@ -146,7 +131,6 @@ COUNTRY_CONFIG = {
             "chán quá game hút máu", "chúc ae may mắn"
         ]
     },
-    # --- FINNISH ---
     "fi": {
         "lang": "Finnish",
         "vibe": "Finnish gambler. Uses 'moi', 'vittu' (lightly), 'perkele', 'noni'.",
@@ -155,7 +139,6 @@ COUNTRY_CONFIG = {
             "perkele kun ei osu", "gl kaikille"
         ]
     },
-    # --- SPANISH ---
     "es": {
         "lang": "Spanish (Latam/Spain)",
         "vibe": "Latino gambler. Uses 'tio', 'bro', 'joder', 'no mames', 'vamos'.",
@@ -164,7 +147,6 @@ COUNTRY_CONFIG = {
             "vamos con todo", "mucha suerte"
         ]
     },
-    # --- NIGERIA ---
     "ng": {
         "lang": "Nigerian Pidgin",
         "vibe": "Naija gambler. Uses 'Abeg', 'How far', 'No wahala', 'Omo', 'Dey', 'Sabi'. Very expressive.",
@@ -173,7 +155,6 @@ COUNTRY_CONFIG = {
             "abeg show love na", "this game no dey smile"
         ]
     },
-    # --- ARABIC ---
     "ar": {
         "lang": "Arabic (Chat/Arabizi)",
         "vibe": "Arabic gambler. Uses 'shabab', 'wallah', 'haram', 'yallah'.",
@@ -182,15 +163,14 @@ COUNTRY_CONFIG = {
             "yallah nshoof al huth", "wein al nas alyom"
         ]
     },
-    "ae": { # Alias for UAE
-        "lang": "Arabic", 
-        "vibe": "Arabic gambler (Gulf). Uses 'Habibi', 'Salam', 'Yallah', 'Wallah'.", 
+    "ae": {
+        "lang": "Arabic",
+        "vibe": "Arabic gambler (Gulf). Uses 'Habibi', 'Salam', 'Yallah', 'Wallah'.",
         "questions": [
             "salam shabab", "wallah lost it all", "any winners?",
             "yallah nshoof al huth", "wein al nas alyom"
-        ] 
+        ]
     },
-    # --- NORWAY ---
     "no": {
         "lang": "Norwegian",
         "vibe": "Norwegian gambler. Uses 'faen', 'uff', 'jaja'.",
@@ -199,7 +179,6 @@ COUNTRY_CONFIG = {
             "lykke til alle", "stille i chatten"
         ]
     },
-    # --- INDONESIAN ---
     "id": {
         "lang": "Indonesian (Bahasa Gaul)",
         "vibe": "Indo gambler. Uses 'gan', 'bang', 'anjir', 'wkwk', 'rungkad', 'gacor'.",
@@ -208,7 +187,6 @@ COUNTRY_CONFIG = {
             "sepi amat ya", "gas terus bang"
         ]
     },
-    # --- PAKISTAN ---
     "pk": {
         "lang": "Urdu/English (Roman Urdu)",
         "vibe": "Pakistani street smart gambler. Uses 'Jani', 'Bhai', 'Scene', 'Khair hai', 'Bachao'. Abbr: 'kya', 'n', 'thx'.",
@@ -217,7 +195,6 @@ COUNTRY_CONFIG = {
             "salam bhai log", "maza nahi aa raha aaj"
         ]
     },
-    # --- CHINESE ---
     "cn": {
         "lang": "Chinese (Casual)",
         "vibe": "Chinese gambler. Uses 'nb', '666', 'tmd' (carefully), 'haha'.",
@@ -225,7 +202,6 @@ COUNTRY_CONFIG = {
             "大家好", "哎呀输惨了", "有人赢吗", "666运气真好", "加油"
         ]
     },
-    # --- INDIA (Desi) ---
     "in": {
         "lang": "Hinglish (Indian Casual)",
         "vibe": "Authentic Desi gambler. Uses 'Bhai', 'Yaar', 'Arre', 'Mast', 'Sahi hai', 'Lagg gaye'. Casual, uses 'tu' not 'aap'. Abbr: 'kya', 'n', 'h', 'thx'.",
@@ -236,10 +212,7 @@ COUNTRY_CONFIG = {
     }
 }
 
-# Default fallbacks if code not found (defaults to EN)
 DEFAULT_CONFIG = COUNTRY_CONFIG["en"]
-
-# --- PROMPTS & PERSONA ---
 
 SAFETY_INSTRUCTIONS = """
 CRITICAL RULES:
@@ -248,7 +221,6 @@ CRITICAL RULES:
 3. Keep timing natural.
 """
 
-# Template for dynamic persona generation - TUNED FOR HUMAN VIBE
 PERSONA_TEMPLATE = """
 You are a real human user in a casino chat. You are NOT an AI.
 Username: {{username}}
@@ -267,7 +239,6 @@ Core Personality:
 IMPORTANT: You MUST speak in {lang}. Do not sound like a robot.
 """
 
-# 1. Context Analysis Prompt
 ANALYSIS_PROMPT = """
 You are analyzing a casino chat to understand the social dynamics.
 Your username is {username}.
@@ -300,7 +271,6 @@ Focus on accuracy and brevity.
 ONLY return valid JSON.
 """
 
-# 2. Inactivity Prompt
 INACTIVITY_PROMPT = """
 {persona}
 Current chat context:
@@ -326,7 +296,6 @@ IMPORTANT: DO NOT REPEAT any of these messages you've sent before:
 Your response:
 """
 
-# 3. Mention/Reply Prompt
 MENTION_PROMPT = """
 {persona}
 Current chat context:
@@ -359,7 +328,6 @@ IMPORTANT: DO NOT REPEAT any of these messages you've sent before:
 Your response (format: @user message):
 """
 
-# 4. General Tag Prompt
 GENERAL_TAG_PROMPT = """
 {persona}
 Current chat context:
@@ -388,7 +356,6 @@ IMPORTANT: DO NOT REPEAT any of these messages you've sent before:
 Your response (start with @username):
 """
 
-# 5. General No-Tag Prompt
 GENERAL_NO_TAG_PROMPT = """
 {persona}
 Current chat context:
@@ -418,7 +385,6 @@ IMPORTANT: DO NOT REPEAT any of these messages you've sent before:
 Your response:
 """
 
-
 def is_allowed_origin(origin):
     if not origin:
         return False
@@ -441,7 +407,7 @@ def add_cors_headers(response):
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return response
 
-# Dynamic route to handle /pk, /in, /us, /de, etc.
+
 @app.route("/<country_code>", methods=["POST", "GET"])
 def handle_country_request(country_code):
     logger.info("Incoming %s %s for Country: %s", request.method, request.path, country_code)
@@ -449,12 +415,10 @@ def handle_country_request(country_code):
     if request.method == "GET":
         return jsonify({"error": "Please use POST with JSON body"}), 405
 
-    # Validate country code
     country_code = country_code.lower()
     config = COUNTRY_CONFIG.get(country_code)
     
     if not config:
-        # If code is invalid or not in our list, return 404 or specific error
         return jsonify({"error": f"Country code '{country_code}' not supported."}), 404
 
     payload = request.json
@@ -468,13 +432,14 @@ def handle_country_request(country_code):
     if not user:
         return jsonify({"error": "Missing user"}), 400
 
-    # ✅ AUTH CHECK
+
+    # ✅ AUTH CHECK (FIXED URL ONLY)
     try:
         if not user.startswith("@"):
             user = "@" + user
 
         encoded_user = quote(user)
-        auth_url = f"[https://chat-auth-75bd02aa400a.herokuapp.com/check?user=](https://chat-auth-75bd02aa400a.herokuapp.com/check?user=){encoded_user}"
+        auth_url = f"https://chat-auth-75bd02aa400a.herokuapp.com/check?user={encoded_user}"
         logger.info("Auth check: %s", auth_url)
 
         auth_res = requests.get(auth_url, timeout=10)
@@ -493,7 +458,6 @@ def handle_country_request(country_code):
 
     final_prompt = ""
     
-    # Construct the specific persona for this request
     persona_filled = PERSONA_TEMPLATE.format(
         lang=config["lang"],
         vibe=config["vibe"],
@@ -557,7 +521,6 @@ def handle_country_request(country_code):
             )
 
         else:
-            # Pick a random question from the country-specific list
             rand_q = random.choice(config["questions"])
             
             final_prompt = GENERAL_NO_TAG_PROMPT.format(
@@ -605,28 +568,23 @@ def handle_country_request(country_code):
 
         output = output.strip()
         output = re.sub(r"^(As an AI|I'm an AI|I am an AI).*?\s*", "", output, flags=re.I)
-
         output = re.sub(r'@\(([^)]+)\)', r'@\1', output)
 
-        # ------------------ Sanitization: remove emojis and specific forbidden chars ------------------
-        # Remove common emoji ranges:
         emoji_pattern = re.compile(
-            "["u"\U0001F600-\U0001F64F"  # emoticons
-            u"\U0001F300-\U0001F5FF"  # symbols & pictographs
-            u"\U0001F680-\U0001F6FF"  # transport & map symbols
-            u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
-            u"\u2600-\u26FF\u2700-\u27BF"  # misc symbols
+            "["u"\U0001F600-\U0001F64F"
+            u"\U0001F300-\U0001F5FF"
+            u"\U0001F680-\U0001F6FF"
+            u"\U0001F1E0-\U0001F1FF"
+            u"\u2600-\u26FF\u2700-\u27BF"
             "]+",
             flags=re.UNICODE
         )
+
         output = emoji_pattern.sub("", output)
-        # Remove variation selector if any
         output = output.replace("\uFE0F", "")
-        # Remove the specific characters requested: / ? and backslash
         output = output.replace("/", "")
         output = output.replace("?", "")
         output = output.replace("\\", "")
-        # -----------------------------------------------------------------------------------------------
 
         if len(output) > 200:
             output = output[:197] + "..."
