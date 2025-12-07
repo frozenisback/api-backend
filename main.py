@@ -1,7 +1,7 @@
 import os
 import requests
 from flask import Flask, request, jsonify
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote   # <-- added quote only
 
 app = Flask(__name__)
 
@@ -129,8 +129,9 @@ def api():
 
     # === AUTH CHECK ===
     try:
+        encoded_user = quote(user)
         auth_res = requests.get(
-            f"https://chat-auth-75bd02aa400a.herokuapp.com/check?user={user.replace('@','')}",
+            f"https://chat-auth-75bd02aa400a.herokuapp.com/check?user={encoded_user}",
             timeout=10
         )
         auth_res.raise_for_status()
@@ -150,10 +151,10 @@ def api():
             recent_messages=data.get("recent_messages", ""),
             bot_messages=data.get("bot_messages", "")
         )
-    
+
     elif action == "chat":
         mode = data.get("mode", "general") # mention, inactivity, general_tag, general_no_tag
-        
+
         # Determine task specific instruction
         task_instruction = ""
         length_limit = "max 5-6 words"
@@ -214,7 +215,7 @@ def api():
         r.raise_for_status()
         ai_data = r.json()
         output = ai_data["choices"][0]["message"]["content"]
-        
+
         return jsonify({
             "raw": {
                 "response": output
@@ -223,6 +224,7 @@ def api():
 
     except Exception as e:
         return jsonify({"error": "Inference API failure", "details": str(e)}), 500
+
 
 @app.route("/", methods=["GET"])
 def home():
