@@ -199,13 +199,17 @@ GENERAL_QUESTIONS = [
 ]
 
 def is_allowed_origin(origin):
-    if not origin: return False
+    if not origin:
+        return False
+    if origin.startswith("chrome-extension://"):
+        return True
     try:
         parsed = urlparse(origin)
         host = parsed.hostname.lower() if parsed.hostname else ""
         return host.startswith("stake")
     except:
         return False
+
 
 @app.after_request
 def add_cors_headers(response):
