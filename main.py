@@ -2,8 +2,6 @@ import os
 import random
 import requests
 import logging
-import json
-import re
 from flask import Flask, request, jsonify
 from urllib.parse import urlparse, quote
 
@@ -61,9 +59,7 @@ Based on these recent chat messages:
 And your bot's recent messages:
 {bot_messages}
 
-IMPORTANT: ONLY RETURN A SINGLE VALID JSON OBJECT. DO NOT INCLUDE ANY MARKDOWN, CODE-FENCES (```), OR ANY EXPLANATORY TEXT. START IMMEDIATELY WITH THE JSON OBJECT (i.e. the very first character output MUST be '{').
-
-Your JSON must match this structure exactly:
+Please provide a JSON response with the following structure:
 {{
   "vibe": "dead|slow|active|chaotic|tilt|happy|argument|flex|bonus-wait",
   "topics": "brief summary of main topics being discussed",
@@ -78,7 +74,7 @@ Your JSON must match this structure exactly:
   "contextMemoryBlob": "max 200 character compressed memory of the current chat state"
 }}
 
-Focus on accuracy and brevity. Only return valid JSON with no surrounding text.
+Focus on accuracy and brevity. Only return valid JSON.
 """
 
 # 2. Inactivity Prompt
@@ -240,71 +236,6 @@ def add_cors_headers(response):
     return response
 
 
-def _clean_json_like_text(text: str) -> str:
-    """
-    Cleans model output to extract a direct JSON object string.
-    - Removes triple/backtick fences and any leading/trailing non-json text.
-    - Extracts the first balanced {...} JSON object while being careful about strings and escapes.
-    - If no balanced object is found, returns trimmed (fence-stripped) text.
-    """
-    if not isinstance(text, str):
-        return text
-
-    s = text.strip()
-
-    # Remove common code fences (```json or ```)
-    s = re.sub(r"^```(?:json)?\s*", "", s, flags=re.IGNORECASE)
-    s = re.sub(r"\s*```$", "", s, flags=re.IGNORECASE)
-    # Remove single backticks
-    s = s.replace("`", "")
-
-    # If the cleaned text already starts with '{' try to extract the balanced object
-    first_brace = s.find('{')
-    if first_brace == -1:
-        return s.strip()
-
-    i = first_brace
-    brace_count = 0
-    in_string = False
-    escape = False
-    end_index = None
-
-    while i < len(s):
-        ch = s[i]
-
-        if ch == '"' and not escape:
-            in_string = not in_string
-        if ch == '\\' and not escape:
-            escape = True
-            i += 1
-            continue
-        else:
-            escape = False
-
-        if not in_string:
-            if ch == '{':
-                brace_count += 1
-            elif ch == '}':
-                brace_count -= 1
-                if brace_count == 0:
-                    end_index = i
-                    break
-        i += 1
-
-    if end_index is not None:
-        candidate = s[first_brace:end_index + 1].strip()
-        # Final safety: try to load as JSON to ensure validity
-        try:
-            json.loads(candidate)
-            return candidate
-        except Exception:
-            # if parsing fails, fall through to return candidate anyway
-            return candidate
-
-    # Fallback: return the fence-stripped trimmed string
-    return s.strip()
-
-
 @app.route("/api", methods=["POST", "GET"])
 def api():
     logger.info("Incoming %s %s", request.method, request.path)
@@ -447,30 +378,14 @@ def api():
         ai_data = r.json()
         output = ai_data["choices"][0]["message"]["content"]
 
-        # Basic clean: remove common AI disclaimers if present
         output = output.strip()
-        output = re.sub(r"^(As an AI[, ]*.*?\.?\s*)", "", output, flags=re.IGNORECASE)
-        output = re.sub(r"^(I am an AI[, ]*.*?\.?\s*)", "", output, flags=re.IGNORECASE)
-        output = re.sub(r"^(I'm an AI[, ]*.*?\.?\s*)", "", output, flags=re.IGNORECASE)
+        output = output.replace("As an AI", "").replace("I'm an AI", "").replace("I am an AI", "")
 
-        # Replace odd parentheses-mention patterns like @(... ) -> @...
+        import re
         output = re.sub(r'@\(([^)]+)\)', r'@\1', output)
 
-        # Clean fences and try to extract a direct JSON object if this was an analyze action.
-        if action == "analyze":
-            cleaned = _clean_json_like_text(output)
-            # If cleaned text does not start with '{', as a last resort, keep original stripped text.
-            if cleaned and cleaned[0] == '{':
-                output = cleaned
-            else:
-                # still try to return cleaned text (best-effort)
-                output = cleaned
-
-            # IMPORTANT: do NOT truncate analysis outputs — they must be valid JSON and not cut off.
-        else:
-            # For chat responses, we may keep shorter responses to fit UI. Truncate if very long.
-            if len(output) > 200:
-                output = output[:197] + "..."
+        if len(output) > 200:
+            output = output[:197] + "..."
 
         return jsonify({"raw": {"response": output}}), 200
 
