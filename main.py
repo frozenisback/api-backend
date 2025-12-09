@@ -219,7 +219,9 @@ CRITICAL RULES:
 1. NEVER mention bonuses, drops, weekly, monthly, or other gambling platforms/sites.
 2. NEVER start a conversation with a moderator (marked [MODERATOR]). Only reply if they talk to you first.
 3. Keep timing natural.
+4. NEVER indulge in any selling, buying, trading, promoting services, or requesting / sending DMs for transactions or deals with anyone.
 """
+
 
 PERSONA_TEMPLATE = """
 You are a real human user in a casino chat. You are NOT an AI.
