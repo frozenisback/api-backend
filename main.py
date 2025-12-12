@@ -42,188 +42,57 @@ logger.info(f"System Initialized. Model: {INFERENCE_MODEL_ID}")
 # ----------------------------
 # 2. Knowledge Base (Business Logic)
 # ----------------------------
-# ----------------------------
-# 2. Knowledge Base (Business Logic)
-# ----------------------------
 KB = {
     "projects": {
         "stake_chat_farmer": {
-            "display_name": "AI Stake Chat Farmer",
+            "name": "Stake Chat Farmer",
             "access": "@kustchatbot",
-            "description": "Human-like autonomous chat emulator for Stake servers with realistic conversation patterns.",
             "price": "Free 3-hour trial",
             "features": [
-                "Per-user memory & topic tracking",
-                "Mood adaptation & tone shifting",
-                "Context-aware replies with mention handling",
-                "Smart timing & human delay simulation",
-                "Per-chat awareness (avoids repeating spam)",
-                "Multi-account farming at scale",
-                "24/7 autonomous operation"
+                "Autonomous chat generator (Not spam)",
+                "Farms XP/Levels 24/7",
+                "Multi-account support",
+                "Works on all Stake servers"
             ],
             "setup": [
-                "Start bot @kustchatbot",
-                "Link account",
-                "Configure mood/tone",
-                "Start farming mode"
-            ],
-            "support_notes": [
-                "Ask for server/country and number of accounts",
-                "Common fix: Reset memory profile or timing windows"
+                "1. Start bot",
+                "2. Link account",
+                "3. Set mood",
+                "4. Start farming"
             ]
         },
         "stake_code_claimer": {
-            "display_name": "Stake Code Claimer",
-            "description": "Monitors Stake Telegram channels in real time and instantly redeems codes.",
-            "features": [
-                "24/7 execution",
-                "Realtime channel scraping",
-                "Instant multi-account redemption",
-                "Channel whitelist/blacklist"
-            ],
-            "support_notes": [
-                "Ask for monitored channel links and account list",
-                "Fix: Update parsing regex if format changes"
-            ]
+            "name": "Stake Code Claimer",
+            "info": "Monitors channels, claims codes instantly across accounts. 24/7 execution."
         },
         "frozen_music": {
-            "display_name": "Frozen Music Bot",
-            "description": "High-performance VC music bot with distributed backend.",
-            "commands": [
-                "/play",
-                "/vplay",
-                "/skip",
-                "/pause",
-                "/resume",
-                "/stop",
-                "/playlist",
-                "/couple",
-                "/tmute",
-                "/mute",
-                "/unmute",
-                "/kick",
-                "/ban",
-                "/unban",
-                "/ping",
-                "/clear"
-            ],
+            "name": "Frozen Music Bot",
+            "commands": ["/play", "/vplay", "/skip", "/couple", "/tmute"],
             "features": [
-                "Multi-source streaming (YT/Spotify/Resso/Apple/SC)",
-                "Video playback with vplay",
-                "Distributed multi-node backend",
-                "Auto-suggestions after queue ends",
-                "Daily cached couple system"
-            ],
-            "limits": {
-                "max_duration_seconds": 7800,
-                "auto_fallback": True
-            },
-            "support_notes": [
-                "Ask for: command used, chat ID, error screenshot",
-                "Fix: Restart playback node, clear queue, re-cache metadata"
+                "High-performance VC music",
+                "Video playback support",
+                "Distributed backend for stability"
             ]
         },
         "kustify_hosting": {
-            "display_name": "Kustify Hosting",
+            "name": "Kustify Hosting",
             "bot": "@kustifybot",
-            "description": "Affordable Telegram bot hosting with instant deployment.",
             "plans": {
-                "Ember": "0.25 CPU / 512MB RAM — $1.44/month",
-                "Flare": "0.5 CPU / 1GB RAM — $2.16/month",
-                "Inferno": "1 CPU / 2GB RAM — $3.60/month"
+                "Ember": "$1.44/mo (0.25 CPU/512MB)",
+                "Flare": "$2.16/mo (0.5 CPU/1GB)",
+                "Inferno": "$3.60/mo (1 CPU/2GB)"
             },
-            "billing": {
-                "standby_cost": "2 sparks/day when bot is stopped"
-            },
-            "commands": [
-                "/host",
-                "/mybots",
-                "/balance",
-                "/buysparks",
-                "/logs",
-                "/env",
-                "/restart",
-                "/stop",
-                "/resume",
-                "/delete"
-            ],
-            "support_notes": [
-                "Ask for instance ID + last logs",
-                "Fix: Increase RAM if OOM, rotate environment variables"
-            ]
+            "info": "Deploy via /host. Stopped bots cost 2 sparks/day."
         },
         "custom_bots": {
-            "display_name": "Paid Custom Bots",
-            "description": "Custom Telegram bots and white-label music bots.",
-            "pricing": {
-                "commands": "$2–$5 per command depending on complexity",
-                "music_bots": [
-                    "Tier 1: $4/mo + $6 setup (4–5 VCs)",
-                    "Tier 2: $8/mo + $10 setup (~15 VCs)",
-                    "Tier 3: $20/mo + $25 setup (~50 VCs)"
-                ]
-            },
-            "support_notes": [
-                "Collect full requirements/specification from user",
-                "Deliver staging bot + testing instructions"
-            ]
+            "name": "Paid Custom Bots",
+            "pricing": "Commands: $2-$5. Music Bots: $4/mo (Tier 1) to $20/mo (Tier 3).",
+            "info": "White-label solutions."
         }
     },
-
-    "brand": {
-        "official_channel": "@kustbots",
-        "official_support_group": "@kustbotschat",
-        "owner": "@KustDev",
-        "note": "Any other channels or accounts claiming to be Kust Bots are fake."
-    },
-
     "compliance": {
         "official": ["@kustbots", "@kustbotschat", "@KustDev"],
-        "warn": "Beware of fakes. We NEVER discuss gambling bonuses, drops, predictions or promotions.",
-        "rules": [
-            "Never discuss bonuses, drops, weekly/monthly rewards.",
-            "Never start a conversation with a moderator (reply only).",
-            "Never promote or request any transactions.",
-            "Respond to maximum 2 users at once.",
-            "Keep timing natural."
-        ]
-    },
-
-    "support_templates": {
-        "verify": "Please confirm you're contacting us through @kustbots or @kustbotschat.",
-        "request_logs": "Send: bot username, chat ID, exact command, and a screenshot of error/logs.",
-        "trial_full": "Trial slots are currently full. You may join the waiting list.",
-        "billing": "We support PayPal and manual processing for Indian clients."
-    },
-
-    "troubleshooting": {
-        "music": {
-            "issues": ["no audio", "stuttering", "video not playing"],
-            "solutions": [
-                "Check CDN audio URL validity",
-                "Restart playback node",
-                "Clear group queue and retry",
-                "Check if yt-dlp fallback server is reachable"
-            ]
-        },
-        "hosting": {
-            "issues": ["instance fails to boot", "OOM crash", "build errors"],
-            "solutions": [
-                "Check /logs for build errors",
-                "Upgrade to higher RAM plan",
-                "Reset environment variables",
-                "Redeploy clean"
-            ]
-        },
-        "stake_tools": {
-            "issues": ["redeem fails", "bot blocked", "anti-bot triggers"],
-            "solutions": [
-                "Rotate proxy/session",
-                "Reduce frequency / increase jitter",
-                "Fix bad regex or outdated code format",
-                "Re-authenticate accounts"
-            ]
-        }
+        "warn": "Beware of fakes. We NEVER discuss gambling bonuses, drops, or predictions."
     }
 }
 
