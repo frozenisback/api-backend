@@ -42,25 +42,16 @@ logger.info(f"System Initialized. Model: {INFERENCE_MODEL_ID}")
 # ----------------------------
 # 2. Knowledge Base (Business Logic)
 # ----------------------------
+# ----------------------------
+# 2. Knowledge Base (Business Logic)
+# ----------------------------
 KB = {
-    "kb_version": "2025-12-12",
-    "brand": {
-        "name": "Kust Bots",
-        "owner": "@KustDev",
-        "official_channel": "@kustbots",
-        "official_support_group": "@kustbotschat",
-        "notes": "All other accounts/channels claiming to be Kust Bots are fake."
-    },
-    "contact": {
-        "support_bot": "@kustifybot",
-        "sales_contact": "@KustXoffical",
-        "urgent_escalation": "@KustDev"
-    },
-    "products": {
+    "projects": {
         "stake_chat_farmer": {
             "display_name": "AI Stake Chat Farmer",
-            "description": "Human-like autonomous chat emulator for Stake servers. Per-user memory, mood adaptation, human delay simulation, multi-account scaling.",
             "access": "@kustchatbot",
+            "description": "Human-like autonomous chat emulator for Stake servers with realistic conversation patterns.",
+            "price": "Free 3-hour trial",
             "features": [
                 "Per-user memory & topic tracking",
                 "Mood adaptation & tone shifting",
@@ -68,206 +59,171 @@ KB = {
                 "Smart timing & human delay simulation",
                 "Per-chat awareness (avoids repeating spam)",
                 "Multi-account farming at scale",
-                "24/7 autonomous operation",
-                "Free 3-hour trial"
+                "24/7 autonomous operation"
             ],
-            "use_cases": [
-                "Increase chat activity levels",
-                "Emulate real user interactions",
-                "Automated conversation seeding for engagement metrics"
+            "setup": [
+                "Start bot @kustchatbot",
+                "Link account",
+                "Configure mood/tone",
+                "Start farming mode"
             ],
-            "security_considerations": [
-                "Respect platform ToS — customer warned about liability",
-                "Rate-limit accounts per-provider to avoid bans",
-                "Rotate proxies and sessions per-account",
-                "Audit logs kept for every session"
-            ],
-            "support_tips": [
-                "Ask: 'Which server/country and how many accounts?'",
-                "Collect: trial token, desired tone profile, schedule windows",
-                "Common fixes: adjust human delay window; reset per-user memory"
+            "support_notes": [
+                "Ask for server/country and number of accounts",
+                "Common fix: Reset memory profile or timing windows"
             ]
         },
         "stake_code_claimer": {
             "display_name": "Stake Code Claimer",
-            "description": "Monitors Stake Telegram channels for promo codes and auto-redeems across configured accounts.",
+            "description": "Monitors Stake Telegram channels in real time and instantly redeems codes.",
             "features": [
-                "Channel scraping + realtime code detection",
+                "24/7 execution",
+                "Realtime channel scraping",
                 "Instant multi-account redemption",
-                "Fast webhook or push-notify pipeline",
-                "Blacklist/whitelist for channels"
+                "Channel whitelist/blacklist"
             ],
-            "support_tips": [
-                "Ask: 'Provide channel links and account list (IDs).' ",
-                "Verify: bot has read permissions in monitored channels",
-                "Common fixes: fix parser regex; increase scrape frequency; add fallback redeem endpoints"
-            ],
-            "security_considerations": [
-                "Rotate redemption endpoints to avoid rate blocks",
-                "Store secrets encrypted",
-                "Alert on failed redemptions"
+            "support_notes": [
+                "Ask for monitored channel links and account list",
+                "Fix: Update parsing regex if format changes"
             ]
         },
-        "frozen_music_bot": {
-            "display_name": "Frozen Music (VC Music Bot)",
-            "description": "Main voice-chat (VC) music bot with multi-source streaming and a distributed playback backend.",
-            "core_commands": {
-                "music": [
-                    "/play <song name or URL> - plays song from YT/Spotify/Resso/Apple/SoundCloud or replied media",
-                    "/vplay <url | query> - plays video + audio",
-                    "/playlist - view/manage playlists",
-                    "/skip - skip current (admin only)",
-                    "/pause - pause stream (admin only)",
-                    "/resume - resume (admin only)",
-                    "/stop or /end - stop and clear queue (admin only)"
-                ],
-                "admin": [
-                    "/mute @user",
-                    "/unmute @user",
-                    "/tmute @user <minutes>",
-                    "/kick @user",
-                    "/ban @user",
-                    "/unban @user"
-                ],
-                "utility": [
-                    "/ping - response time & uptime",
-                    "/clear - clear queue (admin only)",
-                    "/couple - daily cached random pair (per-group cache)"
-                ]
+        "frozen_music": {
+            "display_name": "Frozen Music Bot",
+            "description": "High-performance VC music bot with distributed backend.",
+            "commands": [
+                "/play",
+                "/vplay",
+                "/skip",
+                "/pause",
+                "/resume",
+                "/stop",
+                "/playlist",
+                "/couple",
+                "/tmute",
+                "/mute",
+                "/unmute",
+                "/kick",
+                "/ban",
+                "/unban",
+                "/ping",
+                "/clear"
+            ],
+            "features": [
+                "Multi-source streaming (YT/Spotify/Resso/Apple/SC)",
+                "Video playback with vplay",
+                "Distributed multi-node backend",
+                "Auto-suggestions after queue ends",
+                "Daily cached couple system"
+            ],
+            "limits": {
+                "max_duration_seconds": 7800,
+                "auto_fallback": True
             },
-            "backend": {
-                "architecture": "distributed nodes with metadata server, distribution server, playback nodes, download servers (yt-dlp fallback), multi-layer caching",
-                "limits": {
-                    "max_stream_duration_seconds": 7800,
-                    "auto_fallback_for_long_tracks": True
-                }
-            },
-            "support_tips": [
-                "Ask for: bot username, chat id, exact command used, timestamp, logs or traceback if present",
-                "Common fixes: restart playback node, clear queue, re-cache thumbnail/metadata, validate CDN audio URL"
+            "support_notes": [
+                "Ask for: command used, chat ID, error screenshot",
+                "Fix: Restart playback node, clear queue, re-cache metadata"
             ]
         },
         "kustify_hosting": {
-            "display_name": "Kustify Hosting (Bot Hosting Service)",
+            "display_name": "Kustify Hosting",
             "bot": "@kustifybot",
-            "description": "Lightweight bot hosting with instant deployment and minimal pricing.",
-            "commands": [
-                "/host - create instance",
-                "/mybots - list/manage instances",
-                "/balance - check Sparks balance",
-                "/buysparks - purchase Sparks",
-                "/logs - fetch build/runtime logs",
-                "/env - update environment variables",
-                "/restart - restart instance",
-                "/stop - stop instance",
-                "/resume - resume instance",
-                "/delete - delete instance"
-            ],
-            "pricing": {
-                "ember": { "cpu": 0.25, "ram_mb": 512, "price_usd_per_month": 1.44 },
-                "flare": { "cpu": 0.5, "ram_mb": 1024, "price_usd_per_month": 2.16 },
-                "inferno": { "cpu": 1, "ram_mb": 2048, "price_usd_per_month": 3.60 },
-                "standby_cost_sparks_per_day": 2
+            "description": "Affordable Telegram bot hosting with instant deployment.",
+            "plans": {
+                "Ember": "0.25 CPU / 512MB RAM — $1.44/month",
+                "Flare": "0.5 CPU / 1GB RAM — $2.16/month",
+                "Inferno": "1 CPU / 2GB RAM — $3.60/month"
             },
-            "support_tips": [
-                "Ask for: instance id, last deploy log, requested plan",
-                "Common fixes: check build log, increase RAM if OOM, rotate API keys in env"
+            "billing": {
+                "standby_cost": "2 sparks/day when bot is stopped"
+            },
+            "commands": [
+                "/host",
+                "/mybots",
+                "/balance",
+                "/buysparks",
+                "/logs",
+                "/env",
+                "/restart",
+                "/stop",
+                "/resume",
+                "/delete"
             ],
-            "security": [
-                "Do not expose admin ports publicly",
-                "Provide env-edit via secure vault",
-                "Auto-restore on crash enabled"
+            "support_notes": [
+                "Ask for instance ID + last logs",
+                "Fix: Increase RAM if OOM, rotate environment variables"
             ]
         },
-        "paid_custom_bots": {
-            "description": "Custom bot development service; per-command pricing and monthly hosting options.",
-            "pricing_guidelines": {
-                "per_command": "2-5 USD depending on complexity",
-                "music_bot_plans": [
-                    { "monthly": 4, "setup": 6, "vcs": "4-5" },
-                    { "monthly": 8, "setup": 10, "vcs": "approx 15" },
-                    { "monthly": 20, "setup": 25, "vcs": "approx 50" }
+        "custom_bots": {
+            "display_name": "Paid Custom Bots",
+            "description": "Custom Telegram bots and white-label music bots.",
+            "pricing": {
+                "commands": "$2–$5 per command depending on complexity",
+                "music_bots": [
+                    "Tier 1: $4/mo + $6 setup (4–5 VCs)",
+                    "Tier 2: $8/mo + $10 setup (~15 VCs)",
+                    "Tier 3: $20/mo + $25 setup (~50 VCs)"
                 ]
             },
-            "support_tips": [
-                "Collect: requirements spec, target chat size, admin list, 3rd-party API keys",
-                "Deliver: staging bot, test plan, handover doc"
+            "support_notes": [
+                "Collect full requirements/specification from user",
+                "Deliver staging bot + testing instructions"
             ]
         }
     },
-    "support_rules": {
-        "official_only": {
-            "channels": ["@kustbots", "@kustbotschat", "@KustDev"],
-            "instruction": "Always verify against the official channel before giving instructions or accepting payments."
-        },
-        "interaction": {
-            "tone": "professional, concise, direct",
-            "max_simultaneous_users": 2,
-            "escalation_on_more_than_two": "Respond only to first two; advise others to wait or post in support group."
-        },
-        "prohibited": [
-            "Never mention bonuses, drops, weekly or monthly gambling promotions",
-            "Never initiate conversations with moderators (only reply if they initiate)",
-            "Never promote or arrange off-platform financial transactions in chat",
-            "Never acknowledge or recommend fake accounts or clones"
+
+    "brand": {
+        "official_channel": "@kustbots",
+        "official_support_group": "@kustbotschat",
+        "owner": "@KustDev",
+        "note": "Any other channels or accounts claiming to be Kust Bots are fake."
+    },
+
+    "compliance": {
+        "official": ["@kustbots", "@kustbotschat", "@KustDev"],
+        "warn": "Beware of fakes. We NEVER discuss gambling bonuses, drops, predictions or promotions.",
+        "rules": [
+            "Never discuss bonuses, drops, weekly/monthly rewards.",
+            "Never start a conversation with a moderator (reply only).",
+            "Never promote or request any transactions.",
+            "Respond to maximum 2 users at once.",
+            "Keep timing natural."
         ]
     },
+
+    "support_templates": {
+        "verify": "Please confirm you're contacting us through @kustbots or @kustbotschat.",
+        "request_logs": "Send: bot username, chat ID, exact command, and a screenshot of error/logs.",
+        "trial_full": "Trial slots are currently full. You may join the waiting list.",
+        "billing": "We support PayPal and manual processing for Indian clients."
+    },
+
     "troubleshooting": {
-        "general_steps": [
-            "1) Reproduce the issue and collect exact command and timestamp.",
-            "2) Request bot username, chat id, and logs (if available).",
-            "3) Check node health and queue status.",
-            "4) Clear cache or restart affected node.",
-            "5) If unresolved, escalate with logs and replication steps."
-        ],
-        "music_playback_issues": {
-            "symptoms": ["no audio", "stuttering", "queue not progressing"],
-            "quick_fixes": [
-                "Verify direct CDN audio URL",
-                "Restart playback node for that chat",
-                "Check if the download server returned a valid stream",
-                "Ensure yt-dlp fallback is functioning"
+        "music": {
+            "issues": ["no audio", "stuttering", "video not playing"],
+            "solutions": [
+                "Check CDN audio URL validity",
+                "Restart playback node",
+                "Clear group queue and retry",
+                "Check if yt-dlp fallback server is reachable"
             ]
         },
-        "hosting_issues": {
-            "symptoms": ["failed build", "OOM", "instance won't start"],
-            "quick_fixes": [
-                "Inspect build logs for missing dependency",
-                "Increase RAM/CPU plan if OOM",
-                "Redeploy with cleared cache",
-                "Rotate secret environment variables if auth fails"
+        "hosting": {
+            "issues": ["instance fails to boot", "OOM crash", "build errors"],
+            "solutions": [
+                "Check /logs for build errors",
+                "Upgrade to higher RAM plan",
+                "Reset environment variables",
+                "Redeploy clean"
             ]
         },
-        "stake_tools_issues": {
-            "symptoms": ["redeem fails", "bot blocked", "triggers anti-bot"],
-            "quick_fixes": [
+        "stake_tools": {
+            "issues": ["redeem fails", "bot blocked", "anti-bot triggers"],
+            "solutions": [
                 "Rotate proxy/session",
-                "Lower automation frequency or add jitter",
-                "Check parser regex for new code formats",
-                "Re-auth accounts and verify two-factor if present"
+                "Reduce frequency / increase jitter",
+                "Fix bad regex or outdated code format",
+                "Re-authenticate accounts"
             ]
         }
-    },
-    "onboarding": {
-        "support_agent_checklist": [
-            "Know official channels and contact handles",
-            "Verify product ownership before any transaction",
-            "Confirm user identity if requesting sensitive actions",
-            "Collect necessary logs/screenshots before troubleshooting",
-            "Follow compliance & prohibited list strictly"
-        ],
-        "trial_activation_steps_for_stake_chat_farmer": [
-            "1) Validate trial slot availability",
-            "2) Request target server and sample conversation tone profile",
-            "3) Provision trial accounts (ephemeral) and start 3-hour session",
-            "4) Monitor and capture engagement metrics, provide summary to user"
-        ],
-        "provisioning_hosting_instance": [
-            "1) Get requested plan and bot repo link",
-            "2) Create instance and return instance id",
-            "3) Provide env var template and guide for secrets",
-            "4) Share logs & access instructions"
-        ]
     }
 }
 
@@ -278,20 +234,17 @@ You are KustX, the official AI support for Kust Bots.
 - Name: KustX
 - Owner: @KustDev
 - Official Channel: @kustbots
-- Support Group: @kustbotschat
 
 **BEHAVIOR:**
-1. **Professional & Direct:** Use a professional, concise, and direct tone. Do not ramble.
-2. **Formatting:** IMPORTANT: When listing features, plans, commands, or troubleshooting steps, ALWAYS use Markdown bullet points.
-3. **Safety & Compliance:**
-   - NEVER mention gambling bonuses, drops, or predictions.
-   - WARN users about fake accounts. Only @kustbots and @KustDev are official.
-   - Do not promote off-platform financial transactions in chat.
+1. **Natural & Helpful:** Speak naturally. Be professional but not robotic. You don't need to be extremely brief, but don't ramble.
+2. **Formatting:** IMPORTANT: When listing features, plans, or steps, ALWAYS use Markdown bullet points with each item on a NEW LINE.
+3. **Guardrails:** If asked about coding general apps, essays, math, or competitors, politely decline: "I specialize in Kust Bots services only."
 4. **Tool Use:** Use the `get_info` tool to fetch data. Output ONLY JSON for tools.
    - Example: {"tool": "get_info", "query": "pricing"}
+   - Do NOT say "Let me check" before the JSON. Just output the JSON.
 
 **DATA ACCESS:**
-- Use `get_info` with queries like "services", "troubleshoot", "rules", or specific product names to retrieve knowledge.
+- If the user asks generally about "services", "products", or "what do you offer", use the `get_info` tool with the query "services".
 """
 
 # ----------------------------
@@ -311,36 +264,27 @@ def get_session(sid):
 def search_kb(query):
     query = query.lower()
     
-    # BROAD SEARCH LOGIC
+    # BROAD SEARCH LOGIC (Fixing the "only 1 result" issue)
     broad_terms = ["service", "offer", "product", "menu", "list", "available", "what do you do"]
     if any(term in query for term in broad_terms):
-        summary = ["Here is an overview of all Kust Bots products:"]
-        for key, data in KB["products"].items():
-            desc = data.get('description', 'See details via specific query.')
-            summary.append(f"**{data.get('display_name', key)}**: {desc}")
+        summary = ["Here is an overview of all Kust Bots services:"]
+        for key, data in KB["projects"].items():
+            summary.append(f"**{data['name']}**: {data.get('info') or 'See details via specific query.'}")
         return "\n\n".join(summary)
 
     # SPECIFIC SEARCH LOGIC
     results = []
-    
-    # Check Products
-    for key, data in KB["products"].items():
+    for key, data in KB["projects"].items():
         blob = str(data).lower()
-        if query in key or query in data.get('display_name', '').lower() or any(w in blob for w in query.split()):
-            results.append(f"PRODUCT {data.get('display_name')}: {json.dumps(data)}")
+        if query in key or query in data['name'].lower() or any(w in blob for w in query.split()):
+            results.append(f"{data['name']}: {json.dumps(data)}")
     
-    # Check Troubleshooting
-    if any(w in query for w in ["error", "fix", "fail", "broken", "issue", "problem", "help", "bug", "stutter"]):
-        results.append(f"TROUBLESHOOTING GUIDE: {json.dumps(KB['troubleshooting'])}")
-
-    # Check Compliance/Rules
-    if any(w in query for w in ["rule", "ban", "gamble", "fake", "official", "scam", "owner"]):
-        results.append(f"OFFICIAL CHANNELS & RULES: {json.dumps(KB['brand'])}\n{json.dumps(KB['support_rules'])}")
+    if "official" in query or "fake" in query or "real" in query:
+        results.append(str(KB['compliance']))
     
     if not results:
-        return "No specific record found. Answer based on general Kust knowledge or suggest contacting @KustDev for unsupported issues."
-    
-    return "\n".join(results[:4])
+        return "No specific record found. Answer based on general Kust knowledge."
+    return "\n".join(results[:3])
 
 # ----------------------------
 # 5. Core AI Logic (Buffered Streaming)
