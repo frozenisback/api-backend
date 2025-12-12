@@ -328,7 +328,7 @@ def call_inference_stream(messages):
                             tool_result = f"Tool execution error: {str(e)}"
 
                         # small pause to make the tool feel real and keep animation visible
-                        time.sleep(2.0)
+                        time.sleep(1.8)
 
                         # 3. End Tool (Frontend Delete Animation)
                         yield f"data: {json.dumps({'type': 'tool_end', 'result': 'Done'})}\n\n"
