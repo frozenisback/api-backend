@@ -1,5 +1,5 @@
 # main.py
-# KUST BOTS OFFICIAL SUPPORT SYSTEM (Production Release - V5 KustX)
+# KUST BOTS OFFICIAL SUPPORT SYSTEM (Production Release - V5.1 KustX)
 # Single-File Flask Application with Server-Sent Events (SSE) Streaming
 # Features: Deep Knowledge Retrieval, Cyberpunk UI, Robust Error Handling.
 
@@ -11,7 +11,7 @@ import uuid
 import logging
 import requests
 import sys
-from flask import Flask, request, jsonify, Response, render_template_string, stream_with_context
+from flask import Flask, request, jsonify, Response, stream_with_context
 
 # ----------------------------
 # 1. Configuration & Logging
@@ -24,12 +24,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("kust-support")
 
-# Environment Variables (Preserved)
+# Environment Variables
 INFERENCE_KEY = os.getenv("INFERENCE_KEY", "")
 INFERENCE_MODEL_ID = os.getenv("INFERENCE_MODEL_ID", "")
 BASE_URL = os.getenv("INFERENCE_URL", "")
 
-# Fallback for local testing (remove in production if strictness required)
 if not (INFERENCE_KEY and INFERENCE_MODEL_ID and BASE_URL):
     logger.warning("⚠️ WARNING: Missing INFERENCE env vars. Ensure they are set in production.")
 
@@ -42,7 +41,6 @@ HEADERS = {
 # ----------------------------
 # 2. Comprehensive Knowledge Base
 # ----------------------------
-# Integrated from your provided text file
 KB = {
   "kb_version": "2025-12-12",
   "brand": {
@@ -210,26 +208,18 @@ def get_session(sid):
 # 4. Logic & Tools
 # ----------------------------
 def search_kb(query):
-    """
-    Searches the nested KB dictionary for the query terms.
-    Returns a stringified JSON of the relevant section or a summary.
-    """
     query = query.lower()
     results = {}
 
-    # Helper to recursively search dictionary
     def recursive_search(data, search_term, path=""):
         found = {}
         if isinstance(data, dict):
             for k, v in data.items():
                 new_path = f"{path}.{k}" if path else k
-                # Check key match
                 if search_term in k.lower():
                     found[new_path] = v
-                # Check value match (if string)
                 elif isinstance(v, str) and search_term in v.lower():
                     found[new_path] = v
-                # Recurse
                 elif isinstance(v, (dict, list)):
                     sub_results = recursive_search(v, search_term, new_path)
                     if sub_results:
@@ -237,7 +227,6 @@ def search_kb(query):
         elif isinstance(data, list):
             for i, item in enumerate(data):
                 if isinstance(item, (str, dict, list)):
-                     # robust check for string inside list
                     if isinstance(item, str) and search_term in item.lower():
                          found[f"{path}[{i}]"] = item
                     elif isinstance(item, (dict, list)):
@@ -246,7 +235,6 @@ def search_kb(query):
                             found.update(sub_results)
         return found
 
-    # 1. Direct High-Level Matching
     if "price" in query or "cost" in query:
         results['hosting_pricing'] = KB['products']['kustify_hosting'].get('pricing')
         results['custom_bot_pricing'] = KB['products']['paid_custom_bots'].get('pricing_guidelines')
@@ -255,16 +243,13 @@ def search_kb(query):
         results['music_commands'] = KB['products']['frozen_music_bot'].get('core_commands')
         results['hosting_commands'] = KB['products']['kustify_hosting'].get('commands')
     else:
-        # 2. Broad Search
         hits = recursive_search(KB, query)
-        # Limit hits to prevent token overflow
         count = 0
         for k, v in hits.items():
             if count > 5: break
             results[k] = v
             count += 1
     
-    # If no specific hits, provide menu
     if not results:
         return json.dumps({
             "available_products": list(KB['products'].keys()),
@@ -274,10 +259,6 @@ def search_kb(query):
     return json.dumps(results, indent=2)
 
 def call_inference_stream(messages):
-    """
-    Generator that streams response from AI, handles tool calls,
-    and manages the conversation flow.
-    """
     if not API_URL:
         yield f"data: {json.dumps({'type': 'error', 'content': 'API URL not configured.'})}\n\n"
         return
@@ -286,7 +267,7 @@ def call_inference_stream(messages):
         "model": INFERENCE_MODEL_ID,
         "messages": messages,
         "stream": True,
-        "temperature": 0.3 # Lower temp for more factual support responses
+        "temperature": 0.3
     }
     
     try:
@@ -299,8 +280,6 @@ def call_inference_stream(messages):
 
             tool_buffer = ""
             is_collecting_tool = False
-            
-            # Simple buffer to detect if the VERY FIRST tokens are a JSON object (Tool Call)
             accumulated_start = ""
             checking_for_tool = True
 
@@ -319,14 +298,12 @@ def call_inference_stream(messages):
                         if delta:
                             if checking_for_tool:
                                 accumulated_start += delta
-                                # If we have enough chars to guess if it's JSON
                                 if len(accumulated_start.strip()) > 0:
                                     if accumulated_start.strip().startswith("{"):
                                         is_collecting_tool = True
                                         tool_buffer = accumulated_start
                                         checking_for_tool = False
                                     elif len(accumulated_start) > 5:
-                                        # Clearly not JSON
                                         yield f"data: {json.dumps({'type': 'token', 'content': accumulated_start})}\n\n"
                                         accumulated_start = ""
                                         checking_for_tool = False
@@ -338,40 +315,31 @@ def call_inference_stream(messages):
                     except Exception:
                         pass
 
-            # End of stream logic
             if is_collecting_tool:
                 try:
-                    # Attempt to parse the accumulated JSON tool call
                     tool_data = json.loads(tool_buffer)
                     tool_name = tool_data.get("tool")
                     query = tool_data.get("query")
                     
-                    # 1. Notify Frontend: Tool Started
                     yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'input': query})}\n\n"
                     
-                    # 2. Execute Logic
-                    time.sleep(0.8) # Artificial delay for "Scanning" effect
+                    time.sleep(0.8)
                     if tool_name == "get_info":
                         tool_result = search_kb(query)
                     else:
                         tool_result = "Unknown tool."
 
-                    # 3. Notify Frontend: Tool Ends
                     yield f"data: {json.dumps({'type': 'tool_end', 'result': 'Done'})}\n\n"
 
-                    # 4. Feed result back to AI
                     new_messages = messages + [
                         {"role": "assistant", "content": tool_buffer},
                         {"role": "user", "content": f"SYSTEM: Database Search Results:\n{tool_result}\n\nUsing these results, answer the user."}
                     ]
-                    # Recursively call stream with new context
                     yield from call_inference_stream(new_messages)
                     
                 except json.JSONDecodeError:
-                    # If it wasn't valid JSON, just flush it as text
                     yield f"data: {json.dumps({'type': 'token', 'content': tool_buffer})}\n\n"
             elif checking_for_tool and accumulated_start:
-                # Flush any remaining start buffer
                 yield f"data: {json.dumps({'type': 'token', 'content': accumulated_start})}\n\n"
 
     except Exception as e:
@@ -383,7 +351,8 @@ def call_inference_stream(messages):
 # ----------------------------
 @app.route("/")
 def index():
-    return render_template_string(HTML_TEMPLATE)
+    # Directly return HTML string to avoid template engine parsing issues with JS/CSS
+    return HTML_TEMPLATE
 
 @app.route("/chat/stream", methods=["POST"])
 def chat_stream():
@@ -397,7 +366,6 @@ def chat_stream():
     history = get_session(sid)
     history.append({"role": "user", "content": user_msg})
 
-    # Rolling Window Context: System Prompt + Last 6 messages
     if len(history) > 7:
         history = [history[0]] + history[-6:]
 
@@ -414,7 +382,6 @@ def chat_stream():
                 except: pass
             yield event
         
-        # Only append to history if it was a valid text response (not just a tool call)
         if full_response and not full_response.strip().startswith("{"):
             history.append({"role": "assistant", "content": full_response})
         
@@ -719,7 +686,9 @@ HTML_TEMPLATE = """
                 if (done) break;
                 
                 buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n\n');
+                // We use escaped double backslash n here so Python renders it as \n in JS
+                // which allows the JS to split by literal newline characters
+                const lines = buffer.split('\\n\\n');
                 buffer = lines.pop(); // Keep incomplete line
 
                 for (const line of lines) {
