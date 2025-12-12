@@ -1,7 +1,7 @@
 # main.py
 # -----------------------------------------------------------------------------
-# KUST BOTS PROFESSIONAL SUPPORT SYSTEM (Production Ready - SSE Streaming + Auto-Summary)
-# Single-file Flask application with a modern, high-contrast, animated UI.
+# KUST BOTS PROFESSIONAL SUPPORT SYSTEM (Production Ready)
+# Single-file Flask application with robust streaming and polished UI.
 #
 # DEPLOYMENT:
 #   - Requires: pip install flask requests gunicorn
@@ -31,7 +31,6 @@ INFERENCE_KEY = os.getenv("INFERENCE_KEY", "")
 INFERENCE_MODEL_ID = os.getenv("INFERENCE_MODEL_ID", "")
 BASE_URL = os.getenv("INFERENCE_URL", "")
 
-# Validation
 if not (INFERENCE_KEY and INFERENCE_MODEL_ID and BASE_URL):
     logger.warning("CRITICAL: Missing Env Vars. Bot will fail to reply.")
 
@@ -136,25 +135,16 @@ def update_history(user_id, role, content):
     CHAT_SESSIONS[user_id].append({"role": role, "content": str(content)})
 
 # -----------------------------------------------------------------------------
-# 5. MEMORY OPTIMIZATION (Fix for 400 Errors)
+# 5. MEMORY OPTIMIZATION
 # -----------------------------------------------------------------------------
 def summarize_history_if_needed(user_id):
-    """
-    Compresses chat history if it grows too long to prevent 400 Bad Request / Token Limits.
-    """
     history = CHAT_SESSIONS.get(user_id, [])
-    
-    # If history > 12 messages, condense the middle
     if len(history) > 12:
-        logger.info(f"Triggering auto-summarization for user {user_id}...")
-        
         system_msg = history[0]
         recent_msgs = history[-3:]
         middle_chunk = history[1:-3]
-        
         if not middle_chunk: return
 
-        # Prepare text for summarization
         conversation_text = ""
         for msg in middle_chunk:
             conversation_text += f"{msg.get('role','unknown').upper()}: {msg.get('content','')}\n"
@@ -162,27 +152,19 @@ def summarize_history_if_needed(user_id):
         summary_payload = {
             "model": INFERENCE_MODEL_ID,
             "messages": [
-                {"role": "system", "content": "Compress this support chat into 2-3 sentences. Keep user details, errors reported, and products discussed."},
+                {"role": "system", "content": "Compress this support chat into 2-3 sentences. Keep details."},
                 {"role": "user", "content": conversation_text}
             ],
             "max_tokens": 200,
             "temperature": 0.3
         }
-        
         try:
             r = requests.post(API_URL, json=summary_payload, headers=HEADERS, timeout=10)
             if r.status_code == 200:
                 summary = r.json()["choices"][0]["message"]["content"]
-                new_history = [system_msg]
-                new_history.append({"role": "system", "content": f"[PREVIOUS CHAT SUMMARY]: {summary}"})
-                new_history.extend(recent_msgs)
+                new_history = [system_msg, {"role": "system", "content": f"[SUMMARY]: {summary}"}] + recent_msgs
                 CHAT_SESSIONS[user_id] = new_history
-                logger.info("Chat compressed successfully.")
-            else:
-                CHAT_SESSIONS[user_id] = [system_msg] + recent_msgs
-                logger.warning("Summarization failed. History truncated.")
-        except Exception as e:
-            logger.error(f"Summary Error: {e}")
+        except Exception:
             CHAT_SESSIONS[user_id] = [system_msg] + recent_msgs
 
 # -----------------------------------------------------------------------------
@@ -191,23 +173,24 @@ def summarize_history_if_needed(user_id):
 def tool_get_kust_info(query):
     q = str(query).lower()
     p = KB["products"]
-    
     if "farm" in q or "chat" in q: return json.dumps(p["stake_chat_farmer"])
     if "code" in q or "claim" in q: return json.dumps(p["stake_code_claimer"])
     if "music" in q or "play" in q or "frozen" in q: return json.dumps(p["frozen_music"])
     if "host" in q or "kustify" in q or "plan" in q: return json.dumps(p["kustify"])
     if "custom" in q: return json.dumps(p["custom_bots"])
     if "rule" in q or "fake" in q or "official" in q: return json.dumps(KB["compliance"])
-    
     return json.dumps({"available": list(p.keys()), "note": "Please specify the product name."})
 
 TOOLS = {"get_kust_info": tool_get_kust_info}
 
 # -----------------------------------------------------------------------------
-# 7. STREAMING LOGIC (The Core Engine)
+# 7. STREAMING LOGIC
 # -----------------------------------------------------------------------------
 def stream_inference(messages):
-    """Yields chunks of text from the LLM. Handles 400 errors gracefully."""
+    """
+    Yields chunks of text from the LLM. 
+    Includes fallback for blank responses and permissive parsing.
+    """
     payload = {
         "model": INFERENCE_MODEL_ID,
         "messages": messages,
@@ -216,83 +199,92 @@ def stream_inference(messages):
         "stream": True
     }
     
+    yielded_any = False
+    
     try:
         with requests.post(API_URL, json=payload, headers=HEADERS, stream=True, timeout=60) as r:
-            if r.status_code == 400:
-                logger.error(f"Inference 400 Error: {r.text}")
-                yield "ERR_400"
+            if r.status_code != 200:
+                logger.error(f"API Error {r.status_code}: {r.text}")
+                yield f"[API Error: {r.status_code}]"
                 return
 
-            r.raise_for_status()
-            
             for line in r.iter_lines():
                 if not line: continue
-                line_text = line.decode('utf-8')
-                if line_text.startswith("data: "):
-                    data_str = line_text[6:]
+                line_text = line.decode('utf-8').strip()
+                
+                # Permissive parsing: match 'data:' with or without space
+                if line_text.startswith("data:"):
+                    data_str = line_text[5:].strip()
                     if data_str == "[DONE]": break
+                    
                     try:
                         data_json = json.loads(data_str)
+                        # Handle various API response formats
                         if "choices" in data_json and len(data_json["choices"]) > 0:
-                            delta = data_json["choices"][0].get("delta", {})
+                            choice = data_json["choices"][0]
+                            delta = choice.get("delta", {})
                             content = delta.get("content", "")
+                            
                             if content:
+                                yielded_any = True
                                 yield content
-                    except:
-                        pass
+                    except json.JSONDecodeError:
+                        continue
     except Exception as e:
-        logger.error(f"Stream Error: {e}")
-        yield f"[Error: {str(e)}]"
+        logger.error(f"Stream Exception: {e}")
+        yield f"[Connection Error: {str(e)}]"
+        return
+
+    # Fallback if stream finished but nothing was yielded (empty response)
+    if not yielded_any:
+        yield "..." # Sends a visual spacer so it's not totally blank
 
 def process_chat_stream(user_id, user_message):
-    """
-    Orchestrates the conversation with auto-summary and retry logic.
-    """
     history = get_history(user_id)
     update_history(user_id, "user", user_message)
-
     summarize_history_if_needed(user_id)
     history = get_history(user_id)
+
+    # Signal UI that we are working
+    yield f"data: {json.dumps({'type': 'logic', 'content': 'Analyzing query...'})}\n\n"
 
     for turn in range(3):
         buffer = ""
         is_tool_check = True
         tool_detected = False
-        has_error = False
         
         stream_gen = stream_inference(history)
         
         for chunk in stream_gen:
-            if chunk == "ERR_400":
-                has_error = True
-                break
-
             buffer += chunk
             
+            # Check for tool JSON at start of message
             if is_tool_check:
                 stripped = buffer.lstrip()
-                if not stripped: continue
+                # If we have < 5 chars, wait for more to decide if it's JSON
+                if len(stripped) < 5: 
+                    if stripped and not stripped.startswith("{"):
+                         # Definitely not JSON
+                         is_tool_check = False
+                         yield f"data: {json.dumps({'type': 'token', 'content': buffer})}\n\n"
+                         buffer = ""
+                    continue
+                
                 if stripped.startswith("{"):
+                    # Looks like tool, keep buffering, don't stream to user
                     continue
                 else:
+                    # Not tool, flush buffer and stream normally
                     is_tool_check = False
                     yield f"data: {json.dumps({'type': 'token', 'content': buffer})}\n\n"
                     buffer = ""
             else:
                 yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
 
-        if has_error:
-            yield f"data: {json.dumps({'type': 'logic', 'content': 'Connection interrupted. Optimizing context...'})}\n\n"
-            history = [history[0], history[-1]]
-            CHAT_SESSIONS[user_id] = history
-            stream_gen = stream_inference(history)
-            for chunk in stream_gen:
-                if chunk != "ERR_400":
-                     yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
-            break
-
+        # End of stream chunk processing
         if is_tool_check and buffer.strip().startswith("{"):
             try:
+                # Attempt to execute tool
                 clean_json = buffer.strip().strip("`").replace("json", "")
                 tool_call = json.loads(clean_json)
                 
@@ -300,26 +292,25 @@ def process_chat_stream(user_id, user_message):
                     t_name = tool_call["tool"]
                     t_query = tool_call.get("query", "")
                     
-                    yield f"data: {json.dumps({'type': 'logic', 'content': f'Fetching data from {t_name}...'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'logic', 'content': f'Fetching {t_name}...'})}\n\n"
                     
                     result = TOOLS[t_name](t_query)
-                    
                     update_history(user_id, "assistant", buffer)
                     update_history(user_id, "system", f"[TOOL_OUTPUT]: {result}")
-                    
                     tool_detected = True
                 else:
+                    # JSON but not tool, print it
                     yield f"data: {json.dumps({'type': 'token', 'content': buffer})}\n\n"
-                    update_history(user_id, "assistant", buffer)
-                    break 
             except:
+                # Failed parse, print raw
                 yield f"data: {json.dumps({'type': 'token', 'content': buffer})}\n\n"
-                update_history(user_id, "assistant", buffer)
-                break
         else:
+            # Just normal text remaining in buffer
             if buffer:
                 yield f"data: {json.dumps({'type': 'token', 'content': buffer})}\n\n"
-            break
+            
+            if not is_tool_check and buffer:
+                update_history(user_id, "assistant", buffer)
         
         if not tool_detected:
             break
@@ -338,9 +329,7 @@ def chat_stream():
     data = request.json or {}
     user_id = data.get("user_id", "guest")
     message = data.get("message", "")
-    
-    if not message:
-        return jsonify({"error": "empty message"}), 400
+    if not message: return jsonify({"error": "empty message"}), 400
 
     return Response(
         stream_with_context(process_chat_stream(user_id, message)),
@@ -351,8 +340,7 @@ def chat_stream():
 def reset():
     data = request.json or {}
     uid = data.get("user_id")
-    if uid in CHAT_SESSIONS:
-        del CHAT_SESSIONS[uid]
+    if uid in CHAT_SESSIONS: del CHAT_SESSIONS[uid]
     return jsonify({"status": "ok"})
 
 # -----------------------------------------------------------------------------
@@ -372,34 +360,32 @@ HTML_TEMPLATE = """
             --bg-body: #0f172a;
             --bg-sidebar: #1e293b;
             --bg-chat: #0f172a;
-            --bg-message-bot: #1e293b;
-            --bg-message-user: #3b82f6;
-            --bg-logic: rgba(59, 130, 246, 0.1);
+            --bg-message-bot: #334155;
+            --bg-message-user: #2563eb;
+            --bg-logic: rgba(37, 99, 235, 0.15);
             
             --border-color: #334155;
-            
             --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
+            --text-secondary: #cbd5e1;
             --text-accent: #60a5fa;
             
-            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.3);
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
         
         body {
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-family: 'Inter', sans-serif;
             background-color: var(--bg-body);
             color: var(--text-primary);
             height: 100vh;
             display: flex;
             overflow: hidden;
             font-size: 15px;
-            line-height: 1.5;
+            line-height: 1.6;
         }
 
-        /* --- SIDEBAR --- */
+        /* SIDEBAR */
         .sidebar {
             width: 280px;
             background-color: var(--bg-sidebar);
@@ -429,177 +415,166 @@ HTML_TEMPLATE = """
             font-size: 18px;
         }
 
-        .nav-label {
-            font-size: 12px;
-            text-transform: uppercase;
-            color: var(--text-secondary);
-            font-weight: 600;
-            margin-bottom: 12px;
-            letter-spacing: 0.05em;
-        }
-
         .nav-btn {
             background: transparent;
             border: 1px solid transparent;
-            color: var(--text-primary);
+            color: var(--text-secondary);
             padding: 10px 12px;
             border-radius: 6px;
             text-align: left;
             cursor: pointer;
             font-size: 14px;
             font-weight: 500;
-            transition: all 0.2s ease;
+            transition: all 0.2s;
             margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
         }
         
         .nav-btn:hover {
             background-color: rgba(255, 255, 255, 0.05);
-            border-color: var(--border-color);
+            color: white;
         }
-        
-        .nav-btn span { opacity: 0.7; }
 
-        /* --- MAIN CHAT AREA --- */
+        /* MAIN */
         .main {
             flex: 1;
             display: flex;
             flex-direction: column;
-            position: relative;
             background-color: var(--bg-chat);
         }
 
         .chat-container {
             flex: 1;
             overflow-y: auto;
-            padding: 40px;
+            padding: 30px;
             display: flex;
             flex-direction: column;
-            gap: 24px;
+            gap: 20px;
             scroll-behavior: smooth;
-            max-width: 900px;
+            max-width: 800px;
             margin: 0 auto;
             width: 100%;
         }
         
         .chat-container::-webkit-scrollbar { width: 6px; }
         .chat-container::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
-        .chat-container::-webkit-scrollbar-track { background: transparent; }
 
-        /* --- MESSAGES --- */
+        /* MESSAGES */
         .msg-row {
             display: flex;
             width: 100%;
-            animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: slideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
         }
         
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
         .msg-row.user { justify-content: flex-end; }
         .msg-row.bot { justify-content: flex-start; }
         
         .avatar {
-            width: 36px; height: 36px;
-            border-radius: 50%;
+            width: 32px; height: 32px;
+            border-radius: 8px;
             display: flex; align-items: center; justify-content: center;
-            font-size: 18px;
-            margin-right: 16px;
+            font-size: 16px;
+            margin-right: 12px;
             flex-shrink: 0;
-            background: var(--bg-message-bot);
-            border: 1px solid var(--border-color);
-            color: var(--text-secondary);
+            background: linear-gradient(135deg, #475569, #334155);
+            color: white;
+            box-shadow: var(--shadow-sm);
         }
         
         .msg-bubble {
             max-width: 85%;
-            padding: 16px 20px;
+            padding: 14px 18px;
             border-radius: 12px;
             font-size: 15px;
-            line-height: 1.6;
             position: relative;
             box-shadow: var(--shadow-sm);
+            word-wrap: break-word;
         }
 
         .msg-row.user .msg-bubble {
             background-color: var(--bg-message-user);
             color: white;
-            border-bottom-right-radius: 4px;
+            border-bottom-right-radius: 2px;
         }
 
         .msg-row.bot .msg-bubble {
             background-color: var(--bg-message-bot);
             color: var(--text-primary);
-            border: 1px solid var(--border-color);
-            border-bottom-left-radius: 4px;
+            border-bottom-left-radius: 2px;
         }
 
-        /* --- TOOL / LOGIC STATUS --- */
-        .logic-status {
+        .logic-pill {
             display: inline-flex;
             align-items: center;
-            gap: 10px;
-            padding: 8px 16px;
+            gap: 8px;
+            padding: 6px 14px;
             background: var(--bg-logic);
-            border: 1px solid rgba(59, 130, 246, 0.2);
             border-radius: 20px;
-            font-size: 13px;
+            font-size: 12px;
             color: var(--text-accent);
-            font-family: 'Inter', sans-serif;
             margin: 0 auto;
-            animation: fadeIn 0.3s ease;
+            animation: fadeIn 0.3s;
         }
         
-        .pulse {
-            width: 8px; height: 8px;
-            background-color: var(--text-accent);
+        /* TYPING ANIMATIONS */
+        .typing-dots {
+            display: inline-block;
+        }
+        .typing-dots span {
+            display: inline-block;
+            width: 5px; height: 5px;
+            background-color: #94a3b8;
             border-radius: 50%;
-            animation: pulse 1.5s infinite;
+            margin: 0 2px;
+            animation: wave 1s infinite;
+        }
+        .typing-dots span:nth-child(2) { animation-delay: 0.1s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.2s; }
+        
+        @keyframes wave {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-5px); }
         }
         
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.4); }
-            70% { box-shadow: 0 0 0 6px rgba(96, 165, 250, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0); }
+        @keyframes blink { 50% { opacity: 0; } }
+        .cursor {
+            display: inline-block;
+            width: 2px; height: 1.2em;
+            background-color: var(--text-accent);
+            vertical-align: middle;
+            margin-left: 2px;
+            animation: blink 1s step-end infinite;
         }
 
-        /* --- INPUT AREA --- */
+        /* INPUT */
         .input-container {
             padding: 24px;
-            background-color: var(--bg-body);
             border-top: 1px solid var(--border-color);
+            background: var(--bg-body);
             display: flex;
             justify-content: center;
         }
         
         .input-wrapper {
-            max-width: 900px;
+            max-width: 800px;
             width: 100%;
-            position: relative;
             display: flex;
-            align-items: center;
             background: var(--bg-sidebar);
             border: 1px solid var(--border-color);
-            border-radius: 12px;
+            border-radius: 10px;
             padding: 6px;
-            transition: border-color 0.2s;
-            box-shadow: var(--shadow-md);
+            transition: 0.2s;
         }
         
-        .input-wrapper:focus-within {
-            border-color: var(--text-accent);
-        }
+        .input-wrapper:focus-within { border-color: var(--text-accent); }
 
         input {
             flex: 1;
             background: transparent;
             border: none;
             color: white;
-            padding: 14px 16px;
+            padding: 12px 16px;
             font-family: 'Inter', sans-serif;
             font-size: 15px;
         }
@@ -612,155 +587,104 @@ HTML_TEMPLATE = """
             border-radius: 8px;
             font-weight: 600;
             cursor: pointer;
-            transition: opacity 0.2s;
-            font-size: 14px;
+            transition: 0.2s;
         }
-        
-        button.send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        button.send-btn:hover:not(:disabled) { opacity: 0.9; }
+        button.send-btn:hover { opacity: 0.9; }
+        button.send-btn:disabled { background: #475569; cursor: not-allowed; }
 
-        /* --- UTILS --- */
-        .msg-bubble strong { font-weight: 600; color: white; }
-        .msg-bubble code { 
-            font-family: 'JetBrains Mono', monospace; 
-            background: rgba(0,0,0,0.3); 
-            padding: 2px 6px; 
-            border-radius: 4px; 
-            font-size: 0.9em;
-            color: #e2e8f0;
-        }
+        .msg-bubble strong { color: white; font-weight: 600; }
+        .msg-bubble code { background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
         
-        /* Cursor Animation */
-        .cursor {
-            display: inline-block;
-            width: 2px;
-            height: 1.2em;
-            background-color: var(--text-accent);
-            margin-left: 2px;
-            vertical-align: text-bottom;
-            animation: blink 1s step-end infinite;
-        }
-        @keyframes blink { 50% { opacity: 0; } }
-        
-        /* Mobile */
         @media (max-width: 768px) {
             .sidebar { display: none; }
-            .chat-container { padding: 20px; }
+            .chat-container { padding: 15px; }
             .msg-bubble { max-width: 90%; }
         }
     </style>
 </head>
 <body>
 
-    <!-- SIDEBAR -->
     <div class="sidebar">
         <div class="brand">
             <div class="brand-icon">K</div>
             Kust Bots
         </div>
-        
-        <div class="nav-label">Quick Queries</div>
-        <button class="nav-btn" onclick="quickAsk('What are the Kustify hosting plans?')">
-            <span>Server Plans</span>
-        </button>
-        <button class="nav-btn" onclick="quickAsk('How do I use the music bot?')">
-            <span>Music Bot Commands</span>
-        </button>
-        <button class="nav-btn" onclick="quickAsk('Tell me about Chat Farmer features')">
-            <span>Chat Farmer Info</span>
-        </button>
-        <button class="nav-btn" onclick="quickAsk('I need a custom bot developed')">
-            <span>Custom Development</span>
-        </button>
-
-        <div style="margin-top: auto; border-top: 1px solid var(--border-color); padding-top: 20px;">
-            <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">
-                Session: <span id="uid" style="font-family: 'JetBrains Mono'; font-size: 11px;">...</span>
-            </div>
-            <button class="nav-btn" style="color: #ef4444; padding-left: 0;" onclick="reset()">
-                Reset Conversation
-            </button>
+        <button class="nav-btn" onclick="quickAsk('What are the Kustify plans?')">Server Plans</button>
+        <button class="nav-btn" onclick="quickAsk('Music bot commands?')">Music Commands</button>
+        <button class="nav-btn" onclick="quickAsk('Chat Farmer info?')">Chat Farmer</button>
+        <div style="margin-top:auto">
+            <button class="nav-btn" style="color:#ef4444" onclick="reset()">Reset Chat</button>
         </div>
     </div>
 
-    <!-- MAIN CHAT -->
     <div class="main">
         <div class="chat-container" id="chat">
-            <!-- Initial Bot Welcome -->
             <div class="msg-row bot">
                 <div class="avatar">🤖</div>
                 <div class="msg-bubble">
                     <strong>Support Online.</strong><br>
-                    Welcome to the official Kust Bots support channel. I can help with hosting, music bots, or troubleshooting.<br>
-                    <br>How can I assist you today?
+                    Welcome to Kust Bots. How can I help you today?
                 </div>
             </div>
         </div>
         
         <div class="input-container">
             <div class="input-wrapper">
-                <input type="text" id="prompt" placeholder="Ask a question..." autocomplete="off">
+                <input type="text" id="prompt" placeholder="Type a message..." autocomplete="off">
                 <button class="send-btn" id="sendBtn">Send</button>
             </div>
         </div>
     </div>
 
     <script>
-        const uid = 'usr_' + Math.random().toString(36).substr(2,6);
-        document.getElementById('uid').innerText = uid;
+        const uid = 'user_' + Math.random().toString(36).substr(2,6);
         const chat = document.getElementById('chat');
         const inp = document.getElementById('prompt');
         const btn = document.getElementById('sendBtn');
-        let currentBotMsgBubble = null;
+        let currentBotMsg = null;
         let isGenerating = false;
 
-        function addMsg(role, html) {
+        function addMsg(role, content) {
             const row = document.createElement('div');
-            row.className = `msg-row ${role}`;
-            
-            if (role === 'bot') {
-                row.innerHTML = `<div class="avatar">🤖</div><div class="msg-bubble">${html}</div>`;
-            } else if (role === 'user') {
-                row.innerHTML = `<div class="msg-bubble">${html}</div>`;
-            } else if (role === 'logic') {
-                // Logic is a centered status pill, not a standard message row
-                row.style.justifyContent = 'center';
-                row.innerHTML = `<div class="logic-status">${html}</div>`;
+            if (role === 'logic') {
+                row.style.textAlign = 'center';
+                row.style.marginBottom = '10px';
+                row.innerHTML = `<div class="logic-pill"><span>⚡</span> ${content}</div>`;
+                chat.appendChild(row);
+            } else {
+                row.className = `msg-row ${role}`;
+                const inner = role === 'bot' 
+                    ? `<div class="avatar">🤖</div><div class="msg-bubble">${content}</div>`
+                    : `<div class="msg-bubble">${content}</div>`;
+                row.innerHTML = inner;
+                chat.appendChild(row);
+                if (role === 'bot') return row.querySelector('.msg-bubble');
             }
-
-            chat.appendChild(row);
             chat.scrollTop = chat.scrollHeight;
-            
-            if (role === 'bot') {
-                // Return the bubble element inside so we can stream text into it
-                return row.querySelector('.msg-bubble');
-            }
-            return row;
         }
 
         async function streamChat(text) {
-            if(isGenerating) return;
+            if (isGenerating) return;
             isGenerating = true;
             btn.disabled = true;
-            btn.innerText = '...';
             
             addMsg('user', text);
             inp.value = '';
+            
+            // Immediate feedback: "Thinking..." bubble
+            currentBotMsg = addMsg('bot', '<div class="typing-dots"><span></span><span></span><span></span></div>');
 
             try {
-                const response = await fetch('/api/chat_stream', {
+                const res = await fetch('/api/chat_stream', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ user_id: uid, message: text })
+                    body: JSON.stringify({user_id: uid, message: text})
                 });
 
-                const reader = response.body.getReader();
+                const reader = res.body.getReader();
                 const decoder = new TextDecoder();
-                
-                // Initialize Bot Message
-                currentBotMsgBubble = addMsg('bot', '<span id="stream-content"></span><span class="cursor"></span>');
-                let contentSpan = currentBotMsgBubble.querySelector('#stream-content');
                 let fullText = "";
+                let firstTokenReceived = false;
 
                 while (true) {
                     const { done, value } = await reader.read();
@@ -772,56 +696,58 @@ HTML_TEMPLATE = """
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
                             const jsonStr = line.slice(6);
-                            if(jsonStr === '[DONE]') break;
+                            if (jsonStr === '[DONE]') break;
                             
                             try {
                                 const data = JSON.parse(jsonStr);
                                 
                                 if (data.type === 'token') {
+                                    if (!firstTokenReceived) {
+                                        // Clear "..." and start text
+                                        currentBotMsg.innerHTML = '<span id="txt"></span><span class="cursor"></span>';
+                                        firstTokenReceived = true;
+                                    }
                                     fullText += data.content;
-                                    const formatted = fullText
+                                    const html = fullText
                                         .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>')
                                         .replace(/\\n/g, '<br>');
-                                    contentSpan.innerHTML = formatted;
+                                    currentBotMsg.querySelector('#txt').innerHTML = html;
                                     chat.scrollTop = chat.scrollHeight;
                                 } 
                                 else if (data.type === 'logic') {
-                                    // Remove cursor from previous message chunk
-                                    const oldCursor = currentBotMsgBubble.querySelector('.cursor');
-                                    if(oldCursor) oldCursor.remove();
+                                    // Remove old bubble if it was just typing dots
+                                    if (!firstTokenReceived) currentBotMsg.parentNode.remove();
                                     
-                                    // Show logic pill
-                                    addMsg('logic', `<div class="pulse"></div> ${data.content}`);
+                                    addMsg('logic', data.content);
                                     
-                                    // Start NEW bot message bubble for post-tool text
-                                    currentBotMsgBubble = addMsg('bot', '<span id="stream-content"></span><span class="cursor"></span>');
-                                    contentSpan = currentBotMsgBubble.querySelector('#stream-content');
+                                    // Start new bubble for response
+                                    currentBotMsg = addMsg('bot', '<div class="typing-dots"><span></span><span></span><span></span></div>');
+                                    firstTokenReceived = false;
                                     fullText = "";
                                 }
-                            } catch (e) { console.error('JSON Parse Error', e); }
+                            } catch (e) {}
                         }
                     }
                 }
                 
-                // Cleanup final cursor
-                const finalCursor = currentBotMsgBubble.querySelector('.cursor');
-                if(finalCursor) finalCursor.remove();
+                if (currentBotMsg && currentBotMsg.querySelector('.cursor')) {
+                    currentBotMsg.querySelector('.cursor').remove();
+                }
 
-            } catch (err) {
-                addMsg('bot', '<span style="color:#ef4444">Connection Error. Please try again.</span>');
+            } catch (e) {
+                if (currentBotMsg) currentBotMsg.innerHTML = '<span style="color:#fca5a5">Connection Error. Please retry.</span>';
             }
             
             isGenerating = false;
             btn.disabled = false;
-            btn.innerText = 'Send';
             inp.focus();
         }
 
-        function quickAsk(txt) { streamChat(txt); }
+        function quickAsk(t) { streamChat(t); }
         function reset() { 
-            fetch('/api/reset', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({user_id:uid})});
+            fetch('/api/reset', {method:'POST', body:JSON.stringify({user_id:uid}), headers:{'Content-Type':'application/json'}});
             chat.innerHTML = '';
-            addMsg('bot', '<strong>Conversation Reset.</strong><br>How can I help you?');
+            addMsg('bot', '<strong>Chat Reset.</strong><br>How can I help?');
         }
 
         btn.onclick = () => { if(inp.value.trim()) streamChat(inp.value.trim()); };
