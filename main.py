@@ -210,8 +210,39 @@ def search_kb(query):
     return "\n".join(results[:3])
 
 # ----------------------------
-# 5. Core AI Logic (Buffered Streaming)
+# 5. Core AI Logic (Buffered Streaming with improved tool detection)
 # ----------------------------
+def _find_complete_json(s: str):
+    """
+    Find the first complete top-level JSON object in the string `s`.
+    Returns (json_str, start_index, end_index) or (None, None, None).
+    """
+    start = s.find('{')
+    if start == -1:
+        return None, None, None
+    depth = 0
+    in_str = False
+    escape = False
+    for i in range(start, len(s)):
+        ch = s[i]
+        if in_str:
+            if escape:
+                escape = False
+            elif ch == '\\\\':
+                escape = True
+            elif ch == '"':
+                in_str = False
+        else:
+            if ch == '"':
+                in_str = True
+            elif ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    return s[start:i+1], start, i+1
+    return None, None, None
+
 def call_inference_stream(messages):
     payload = {
         "model": INFERENCE_MODEL_ID,
@@ -226,78 +257,112 @@ def call_inference_stream(messages):
                 yield f"data: {json.dumps({'type': 'error', 'content': f'API Error {r.status_code}'})}\n\n"
                 return
 
-            # Buffering to hide JSON tool calls
-            tool_buffer = ""
-            is_collecting_tool = False
-            tool_check_buffer = "" 
-            check_completed = False
-
+            buffer_text = ""  # accumulates non-tool content or possible partial JSON
             for line in r.iter_lines():
-                if not line: continue
+                if not line: 
+                    continue
                 line = line.decode('utf-8')
                 
                 if line.startswith('data:'):
                     data_str = line[5:].strip()
-                    if data_str == '[DONE]': break
+                    if data_str == '[DONE]':
+                        # Flush any remaining buffer_text
+                        if buffer_text:
+                            yield f"data: {json.dumps({'type': 'token', 'content': buffer_text})}\n\n"
+                            buffer_text = ""
+                        break
                     
                     try:
                         chunk_json = json.loads(data_str)
-                        delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
-                        if not delta and 'content' in chunk_json: delta = chunk_json['content']
+                    except Exception:
+                        # if parsing fails, skip this line
+                        continue
 
-                        if delta:
-                            if not check_completed:
-                                tool_check_buffer += delta
-                                stripped = tool_check_buffer.lstrip()
-                                # Check if response starts with JSON object
-                                if stripped:
-                                    if stripped.startswith("{"):
-                                        is_collecting_tool = True
-                                        tool_buffer = tool_check_buffer
-                                    else:
-                                        is_collecting_tool = False
-                                        yield f"data: {json.dumps({'type': 'token', 'content': tool_check_buffer})}\n\n"
-                                    check_completed = True
-                                elif len(tool_check_buffer) > 50:
-                                    is_collecting_tool = False
-                                    yield f"data: {json.dumps({'type': 'token', 'content': tool_check_buffer})}\n\n"
-                                    check_completed = True
+                    # Extract token delta if present
+                    delta = ""
+                    # Standard streaming delta
+                    delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                    # Some backends send 'content' directly
+                    if not delta and 'content' in chunk_json:
+                        delta = chunk_json.get('content', '')
+
+                    if not delta:
+                        continue
+
+                    # Append incoming delta to buffer_text (we will decide when to flush)
+                    buffer_text += delta
+
+                    # Check for a complete JSON object in buffer_text (tool call)
+                    js, sidx, eidx = _find_complete_json(buffer_text)
+                    if js:
+                        # Found a complete JSON object — split buffer into before/json/after
+                        before = buffer_text[:sidx]
+                        after = buffer_text[eidx:]
+                        # Flush any "before" text as normal tokens
+                        if before:
+                            yield f"data: {json.dumps({'type': 'token', 'content': before})}\n\n"
+
+                        # Try parse the JSON as tool instruction
+                        try:
+                            tool_data = json.loads(js)
+                        except Exception:
+                            # If parse fails for some reason, emit the whole js as token
+                            yield f"data: {json.dumps({'type': 'token', 'content': js})}\n\n"
+                            buffer_text = after
+                            continue
+
+                        tool_name = tool_data.get("tool")
+                        query = tool_data.get("query")
+
+                        # 1. Start Tool (Frontend Animation)
+                        yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'input': query})}\n\n"
+
+                        # 2. Execute tool (simulate small delay to show spinner)
+                        # Keep animation visible for a short moment after tool finishes
+                        try:
+                            if tool_name == "get_info":
+                                tool_result = search_kb(query)
                             else:
-                                if is_collecting_tool:
-                                    tool_buffer += delta
-                                else:
-                                    yield f"data: {json.dumps({'type': 'token', 'content': delta})}\n\n"
-                                
-                    except: pass
+                                tool_result = "Tool not found."
+                        except Exception as e:
+                            tool_result = f"Tool execution error: {str(e)}"
 
-            if is_collecting_tool:
-                try:
-                    tool_data = json.loads(tool_buffer)
-                    tool_name = tool_data.get("tool")
-                    query = tool_data.get("query")
-                    
-                    # 1. Start Tool (Frontend Animation)
-                    yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'input': query})}\n\n"
-                    
-                    # 2. Execute
-                    time.sleep(0.5)
-                    if tool_name == "get_info":
-                        tool_result = search_kb(query)
+                        # small pause to make the tool feel real and keep animation visible
+                        time.sleep(0.8)
+
+                        # 3. End Tool (Frontend Delete Animation)
+                        yield f"data: {json.dumps({'type': 'tool_end', 'result': 'Done'})}\n\n"
+
+                        # 4. Recursion with results: feed the original assistant tool call + the tool result back to the model
+                        new_messages = messages + [
+                            {"role": "assistant", "content": js},
+                            {"role": "user", "content": f"TOOL RESULT: {tool_result}"}
+                        ]
+
+                        # Reset buffer_text to any content after the JSON object
+                        buffer_text = after
+
+                        # Recurse: continue streaming using the updated messages context
+                        # This will produce additional streamed tokens which we will yield to the client
+                        yield from call_inference_stream(new_messages)
+                        # After recursion returns, continue processing remaining stream normally
+                        continue
                     else:
-                        tool_result = "Tool not found."
-                    
-                    # 3. End Tool (Frontend Delete Animation)
-                    yield f"data: {json.dumps({'type': 'tool_end', 'result': 'Done'})}\n\n"
+                        # No complete JSON found yet — if buffer_text looks like it MAY contain a JSON start ('{'),
+                        # we hold it back until complete to avoid leaking partial JSON text into the UI.
+                        if '{' in buffer_text:
+                            # if buffer grows too large without closing braces, flush a portion to avoid memory blow
+                            if len(buffer_text) > 2048:
+                                yield f"data: {json.dumps({'type': 'token', 'content': buffer_text})}\n\n"
+                                buffer_text = ""
+                        else:
+                            # safe to flush immediately (no JSON in sight)
+                            yield f"data: {json.dumps({'type': 'token', 'content': buffer_text})}\n\n"
+                            buffer_text = ""
 
-                    # 4. Recursion with results
-                    new_messages = messages + [
-                        {"role": "assistant", "content": tool_buffer},
-                        {"role": "user", "content": f"TOOL RESULT: {tool_result}"}
-                    ]
-                    yield from call_inference_stream(new_messages)
-                    
-                except json.JSONDecodeError:
-                    yield f"data: {json.dumps({'type': 'token', 'content': tool_buffer})}\n\n"
+            # finished streaming; flush any remaining residual
+            if buffer_text:
+                yield f"data: {json.dumps({'type': 'token', 'content': buffer_text})}\n\n"
 
     except Exception as e:
         logger.exception(f"Stream Error: {e}")
@@ -488,7 +553,8 @@ HTML_TEMPLATE = """
                                 activeToolEl = createToolCard(data.input || data.tool);
                             }
                             if (data.type === 'tool_end') {
-                                if(activeToolEl) activeToolEl.remove();
+                                // keep a tiny grace so animations look smooth client-side as well
+                                setTimeout(() => { if(activeToolEl) activeToolEl.remove(); activeToolEl = null; }, 50);
                             }
                             if (data.type === 'token') {
                                 if (isFirstToken) { botBubble.innerHTML = ''; isFirstToken = false; }
