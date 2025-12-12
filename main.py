@@ -37,6 +37,12 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
+# Telegram API Configuration
+TELEGRAM_BOT_TOKEN = "8127386338:AAFLgLGp3KX2NI85kxEpSytz8k1GO5DSZww"
+TELEGRAM_CHANNEL_ID = "-1002056355467"
+TELEGRAM_GROUP_ID = "-1001810811394"
+TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+
 logger.info(f"System Initialized. Model: {INFERENCE_MODEL_ID}")
 
 # ----------------------------
@@ -251,6 +257,8 @@ You are KustX, the official AI support for Kust Bots.
 4. **Tool Use:** Use the `get_info` tool to fetch data. Output ONLY JSON for tools.
    - Example: {"tool": "get_info", "query": "pricing"}
    - Do NOT say "Let me check" before the JSON. Just output the JSON.
+5. **Telegram Tool:** Use the `get_telegram_messages` tool to fetch recent messages from the official channel or support group.
+   - Example: {"tool": "get_telegram_messages", "source": "channel"} or {"tool": "get_telegram_messages", "source": "group"}
 
 **DATA ACCESS:**
 - If the user asks generally about "services", "products", or "what do you offer", use the `get_info` tool with the query "services".
@@ -330,6 +338,58 @@ def search_kb(query):
         return "No specific record found. Answer based on general Kust knowledge."
     return "\n".join(results[:3])
 
+def get_telegram_messages(source):
+    """
+    Fetch recent messages from Telegram channel or group
+    source: either "channel" or "group"
+    """
+    try:
+        chat_id = TELEGRAM_CHANNEL_ID if source == "channel" else TELEGRAM_GROUP_ID
+        url = f"{TELEGRAM_API_URL}/getChatHistory"
+        
+        params = {
+            "chat_id": chat_id,
+            "limit": 10,  # Get last 10 messages
+            "offset_id": -1  # Start from the most recent message
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        
+        if response.status_code != 200:
+            return f"Failed to fetch messages from Telegram {source}. API returned status code {response.status_code}."
+        
+        data = response.json()
+        
+        if not data.get("ok"):
+            return f"Failed to fetch messages from Telegram {source}. API error: {data.get('description', 'Unknown error')}."
+        
+        messages = data.get("result", [])
+        if not messages:
+            return f"No messages found in the {source}."
+        
+        # Format messages
+        formatted_messages = f"**Recent messages from {source}:**\n\n"
+        for msg in messages:
+            sender = msg.get("from", {}).get("first_name", "Unknown")
+            text = msg.get("text", "")
+            date = msg.get("date", "")
+            
+            # Convert timestamp to readable date
+            if date:
+                date = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(date))
+            
+            # Skip empty messages
+            if not text:
+                continue
+                
+            formatted_messages += f"**{sender}** ({date}):\n{text}\n\n"
+        
+        return formatted_messages
+    
+    except Exception as e:
+        logger.error(f"Error fetching Telegram messages: {str(e)}")
+        return f"An error occurred while fetching messages from Telegram {source}: {str(e)}"
+
 # ----------------------------
 # 5. Core AI Logic (Buffered Streaming)
 # ----------------------------
@@ -404,6 +464,9 @@ def call_inference_stream(messages):
                     time.sleep(0.5)
                     if tool_name == "get_info":
                         tool_result = search_kb(query)
+                    elif tool_name == "get_telegram_messages":
+                        source = tool_data.get("source", "channel")
+                        tool_result = get_telegram_messages(source)
                     else:
                         tool_result = "Tool not found."
                     
@@ -544,6 +607,8 @@ HTML_TEMPLATE = """
             <button class="action-btn" onclick="ask('What is Kustify Hosting pricing?')">💰 Hosting Plans</button>
             <button class="action-btn" onclick="ask('How do I setup the Stake Chat Farmer?')">🤖 Stake Farmer Setup</button>
             <button class="action-btn" onclick="ask('Show me commands for Frozen Music Bot')">🎵 Music Bot Cmds</button>
+            <button class="action-btn" onclick="ask('Show me recent messages from the channel')">📢 Channel Messages</button>
+            <button class="action-btn" onclick="ask('Show me recent messages from the support group')">💬 Support Group Messages</button>
         </div>
         <div style="margin-top:auto; font-size:0.75rem; color:var(--text-dim);">Session ID: <span id="sess-id" style="font-family:monospace">...</span><br><a href="#" onclick="resetSession()" style="color:var(--accent)">Reset Session</a></div>
     </div>
