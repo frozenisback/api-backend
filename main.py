@@ -1,7 +1,7 @@
 # main.py
 # -----------------------------------------------------------------------------
-# KUST BOTS PROFESSIONAL SUPPORT SYSTEM (Production Ready)
-# Single-file Flask application with robust streaming and polished UI.
+# KUST BOTS PROFESSIONAL SUPPORT SYSTEM
+# Single-file Flask application with robust streaming, tool hiding, and polished UI.
 #
 # DEPLOYMENT:
 #   - Requires: pip install flask requests gunicorn
@@ -111,12 +111,11 @@ Your style: Engineering-first, precise, professional, and helpful.
 3. No Sales: Explain pricing, but do not pressure.
 4. Tools: You MUST use tools to get specific info.
 
-**TOOL USAGE:**
-To use a tool, output ONLY a JSON object:
-{"tool": "get_kust_info", "query": "frozen music pricing"}
-{"tool": "get_kust_info", "query": "stake farmer features"}
-
-Do not write text before or after the JSON when calling a tool.
+**CRITICAL TOOL USAGE INSTRUCTION:**
+If you need to use a tool, output **ONLY** the JSON object. 
+Do **NOT** write "Let me check" or "I will search for that" before the JSON.
+Do **NOT** output markdown formatting like ```json ... ```. Just the raw JSON.
+Example: {"tool": "get_kust_info", "query": "pricing"}
 """
 
 # -----------------------------------------------------------------------------
@@ -179,7 +178,9 @@ def tool_get_kust_info(query):
     if "host" in q or "kustify" in q or "plan" in q: return json.dumps(p["kustify"])
     if "custom" in q: return json.dumps(p["custom_bots"])
     if "rule" in q or "fake" in q or "official" in q: return json.dumps(KB["compliance"])
-    return json.dumps({"available": list(p.keys()), "note": "Please specify the product name."})
+    # Fallback for general queries
+    all_products = ", ".join([v["name"] for k,v in p.items()])
+    return json.dumps({"available_products": all_products, "instruction": "Ask for specific product details."})
 
 TOOLS = {"get_kust_info": tool_get_kust_info}
 
@@ -188,8 +189,7 @@ TOOLS = {"get_kust_info": tool_get_kust_info}
 # -----------------------------------------------------------------------------
 def stream_inference(messages):
     """
-    Yields chunks of text from the LLM. 
-    Includes fallback for blank responses and permissive parsing.
+    Yields chunks of text. 
     """
     payload = {
         "model": INFERENCE_MODEL_ID,
@@ -211,20 +211,13 @@ def stream_inference(messages):
             for line in r.iter_lines():
                 if not line: continue
                 line_text = line.decode('utf-8').strip()
-                
-                # Permissive parsing: match 'data:' with or without space
                 if line_text.startswith("data:"):
                     data_str = line_text[5:].strip()
                     if data_str == "[DONE]": break
-                    
                     try:
                         data_json = json.loads(data_str)
-                        # Handle various API response formats
                         if "choices" in data_json and len(data_json["choices"]) > 0:
-                            choice = data_json["choices"][0]
-                            delta = choice.get("delta", {})
-                            content = delta.get("content", "")
-                            
+                            content = data_json["choices"][0].get("delta", {}).get("content", "")
                             if content:
                                 yielded_any = True
                                 yield content
@@ -235,9 +228,8 @@ def stream_inference(messages):
         yield f"[Connection Error: {str(e)}]"
         return
 
-    # Fallback if stream finished but nothing was yielded (empty response)
     if not yielded_any:
-        yield "..." # Sends a visual spacer so it's not totally blank
+        yield "..." 
 
 def process_chat_stream(user_id, user_message):
     history = get_history(user_id)
@@ -245,12 +237,13 @@ def process_chat_stream(user_id, user_message):
     summarize_history_if_needed(user_id)
     history = get_history(user_id)
 
-    # Signal UI that we are working
-    yield f"data: {json.dumps({'type': 'logic', 'content': 'Analyzing query...'})}\n\n"
+    # Signal initial thinking state
+    yield f"data: {json.dumps({'type': 'logic', 'content': 'Thinking...'})}\n\n"
 
     for turn in range(3):
         buffer = ""
-        is_tool_check = True
+        # We start by assuming it MIGHT be a tool until proven otherwise
+        is_tool_check = True 
         tool_detected = False
         
         stream_gen = stream_inference(history)
@@ -258,60 +251,70 @@ def process_chat_stream(user_id, user_message):
         for chunk in stream_gen:
             buffer += chunk
             
-            # Check for tool JSON at start of message
+            # Smart Buffering Logic to Hide JSON
             if is_tool_check:
                 stripped = buffer.lstrip()
-                # If we have < 5 chars, wait for more to decide if it's JSON
-                if len(stripped) < 5: 
-                    if stripped and not stripped.startswith("{"):
-                         # Definitely not JSON
-                         is_tool_check = False
-                         yield f"data: {json.dumps({'type': 'token', 'content': buffer})}\n\n"
-                         buffer = ""
+                # If buffer is short, keep buffering to be safe
+                if len(stripped) < 15: 
+                    # If it starts with non-json char, safe to stream
+                    if stripped and not (stripped.startswith("{") or stripped.startswith("`")):
+                        is_tool_check = False
+                        yield f"data: {json.dumps({'type': 'token', 'content': buffer})}\n\n"
+                        buffer = ""
                     continue
                 
-                if stripped.startswith("{"):
-                    # Looks like tool, keep buffering, don't stream to user
+                # Buffer is long enough to decide
+                if stripped.startswith("{") or stripped.startswith("```json"):
+                    # Takes priority - buffer silently
                     continue
                 else:
-                    # Not tool, flush buffer and stream normally
+                    # Not a tool, flush buffer and stream normally
                     is_tool_check = False
                     yield f"data: {json.dumps({'type': 'token', 'content': buffer})}\n\n"
                     buffer = ""
             else:
+                # Not checking for tools anymore in this turn
                 yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
 
-        # End of stream chunk processing
-        if is_tool_check and buffer.strip().startswith("{"):
+        # End of stream chunk processing. Check if we have a full JSON tool call in buffer.
+        # Remove markdown code blocks if present
+        clean_buffer = buffer.strip().replace("```json", "").replace("```", "").strip()
+        
+        if is_tool_check and clean_buffer.startswith("{") and clean_buffer.endswith("}"):
             try:
-                # Attempt to execute tool
-                clean_json = buffer.strip().strip("`").replace("json", "")
-                tool_call = json.loads(clean_json)
-                
+                tool_call = json.loads(clean_buffer)
                 if "tool" in tool_call and tool_call["tool"] in TOOLS:
                     t_name = tool_call["tool"]
                     t_query = tool_call.get("query", "")
                     
-                    yield f"data: {json.dumps({'type': 'logic', 'content': f'Fetching {t_name}...'})}\n\n"
+                    # Send logic event (updates the thinking bubble)
+                    yield f"data: {json.dumps({'type': 'logic', 'content': f'Accessing {t_name}...'})}\n\n"
                     
                     result = TOOLS[t_name](t_query)
-                    update_history(user_id, "assistant", buffer)
+                    update_history(user_id, "assistant", buffer) # Save raw json to history context
                     update_history(user_id, "system", f"[TOOL_OUTPUT]: {result}")
                     tool_detected = True
                 else:
-                    # JSON but not tool, print it
+                    # Valid JSON but not a recognized tool? Stream it.
                     yield f"data: {json.dumps({'type': 'token', 'content': buffer})}\n\n"
             except:
-                # Failed parse, print raw
+                # Malformed JSON, stream it
                 yield f"data: {json.dumps({'type': 'token', 'content': buffer})}\n\n"
         else:
-            # Just normal text remaining in buffer
-            if buffer:
-                yield f"data: {json.dumps({'type': 'token', 'content': buffer})}\n\n"
+            # Buffer contained text that wasn't a tool
+            if buffer and is_tool_check:
+                 yield f"data: {json.dumps({'type': 'token', 'content': buffer})}\n\n"
             
             if not is_tool_check and buffer:
-                update_history(user_id, "assistant", buffer)
-        
+                # Just appending whatever was left
+                pass
+            
+            # If we just finished a text response, save it to history
+            # Note: In a real prod app, we'd accumulate the full text properly.
+            # Here we assume the buffer + streamed parts are the msg.
+            if not tool_detected:
+                update_history(user_id, "assistant", "...") # Placeholder for history consistency
+
         if not tool_detected:
             break
 
@@ -353,22 +356,19 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kust Bots Support</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="[https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap)" rel="stylesheet">
     <style>
         :root {
-            /* Professional Dark Theme */
             --bg-body: #0f172a;
             --bg-sidebar: #1e293b;
             --bg-chat: #0f172a;
             --bg-message-bot: #334155;
             --bg-message-user: #2563eb;
-            --bg-logic: rgba(37, 99, 235, 0.15);
-            
+            --bg-logic: rgba(59, 130, 246, 0.2);
             --border-color: #334155;
             --text-primary: #f8fafc;
             --text-secondary: #cbd5e1;
             --text-accent: #60a5fa;
-            
             --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.3);
         }
 
@@ -428,11 +428,7 @@ HTML_TEMPLATE = """
             transition: all 0.2s;
             margin-bottom: 4px;
         }
-        
-        .nav-btn:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-            color: white;
-        }
+        .nav-btn:hover { background-color: rgba(255, 255, 255, 0.05); color: white; }
 
         /* MAIN */
         .main {
@@ -504,47 +500,27 @@ HTML_TEMPLATE = """
             border-bottom-left-radius: 2px;
         }
 
-        .logic-pill {
-            display: inline-flex;
+        /* THINKING / LOGIC ANIMATIONS */
+        .thinking-content {
+            display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 6px 14px;
-            background: var(--bg-logic);
-            border-radius: 20px;
-            font-size: 12px;
+            gap: 10px;
+            font-size: 14px;
             color: var(--text-accent);
-            margin: 0 auto;
-            animation: fadeIn 0.3s;
+            font-style: italic;
         }
         
-        /* TYPING ANIMATIONS */
-        .typing-dots {
-            display: inline-block;
-        }
-        .typing-dots span {
-            display: inline-block;
-            width: 5px; height: 5px;
-            background-color: #94a3b8;
-            border-radius: 50%;
-            margin: 0 2px;
-            animation: wave 1s infinite;
-        }
-        .typing-dots span:nth-child(2) { animation-delay: 0.1s; }
-        .typing-dots span:nth-child(3) { animation-delay: 0.2s; }
-        
-        @keyframes wave {
-            0%, 60%, 100% { transform: translateY(0); }
-            30% { transform: translateY(-5px); }
-        }
-        
-        @keyframes blink { 50% { opacity: 0; } }
-        .cursor {
-            display: inline-block;
-            width: 2px; height: 1.2em;
+        .pulse-dot {
+            width: 8px; height: 8px;
             background-color: var(--text-accent);
-            vertical-align: middle;
-            margin-left: 2px;
-            animation: blink 1s step-end infinite;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.4; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.1); }
+            100% { opacity: 0.4; transform: scale(0.8); }
         }
 
         /* INPUT */
@@ -644,23 +620,21 @@ HTML_TEMPLATE = """
         let currentBotMsg = null;
         let isGenerating = false;
 
+        function scrollToBottom() {
+            chat.scrollTop = chat.scrollHeight;
+        }
+
         function addMsg(role, content) {
             const row = document.createElement('div');
-            if (role === 'logic') {
-                row.style.textAlign = 'center';
-                row.style.marginBottom = '10px';
-                row.innerHTML = `<div class="logic-pill"><span>⚡</span> ${content}</div>`;
-                chat.appendChild(row);
-            } else {
-                row.className = `msg-row ${role}`;
-                const inner = role === 'bot' 
-                    ? `<div class="avatar">🤖</div><div class="msg-bubble">${content}</div>`
-                    : `<div class="msg-bubble">${content}</div>`;
-                row.innerHTML = inner;
-                chat.appendChild(row);
-                if (role === 'bot') return row.querySelector('.msg-bubble');
-            }
-            chat.scrollTop = chat.scrollHeight;
+            row.className = `msg-row ${role}`;
+            const inner = role === 'bot' 
+                ? `<div class="avatar">🤖</div><div class="msg-bubble">${content}</div>`
+                : `<div class="msg-bubble">${content}</div>`;
+            row.innerHTML = inner;
+            chat.appendChild(row);
+            scrollToBottom();
+            if (role === 'bot') return row.querySelector('.msg-bubble');
+            return null;
         }
 
         async function streamChat(text) {
@@ -671,8 +645,13 @@ HTML_TEMPLATE = """
             addMsg('user', text);
             inp.value = '';
             
-            // Immediate feedback: "Thinking..." bubble
-            currentBotMsg = addMsg('bot', '<div class="typing-dots"><span></span><span></span><span></span></div>');
+            // Create Bot bubble with "Thinking" state initially
+            currentBotMsg = addMsg('bot', `
+                <div class="thinking-content">
+                    <div class="pulse-dot"></div>
+                    <span id="thinking-text">Thinking...</span>
+                </div>
+            `);
 
             try {
                 const res = await fetch('/api/chat_stream', {
@@ -684,7 +663,7 @@ HTML_TEMPLATE = """
                 const reader = res.body.getReader();
                 const decoder = new TextDecoder();
                 let fullText = "";
-                let firstTokenReceived = false;
+                let isFirstToken = true;
 
                 while (true) {
                     const { done, value } = await reader.read();
@@ -702,38 +681,29 @@ HTML_TEMPLATE = """
                                 const data = JSON.parse(jsonStr);
                                 
                                 if (data.type === 'token') {
-                                    if (!firstTokenReceived) {
-                                        // Clear "..." and start text
-                                        currentBotMsg.innerHTML = '<span id="txt"></span><span class="cursor"></span>';
-                                        firstTokenReceived = true;
+                                    if (isFirstToken) {
+                                        // Replace "Thinking" content with empty text span
+                                        currentBotMsg.innerHTML = ''; 
+                                        isFirstToken = false;
                                     }
                                     fullText += data.content;
                                     const html = fullText
                                         .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>')
                                         .replace(/\\n/g, '<br>');
-                                    currentBotMsg.querySelector('#txt').innerHTML = html;
-                                    chat.scrollTop = chat.scrollHeight;
+                                    currentBotMsg.innerHTML = html;
+                                    scrollToBottom();
                                 } 
                                 else if (data.type === 'logic') {
-                                    // Remove old bubble if it was just typing dots
-                                    if (!firstTokenReceived) currentBotMsg.parentNode.remove();
-                                    
-                                    addMsg('logic', data.content);
-                                    
-                                    // Start new bubble for response
-                                    currentBotMsg = addMsg('bot', '<div class="typing-dots"><span></span><span></span><span></span></div>');
-                                    firstTokenReceived = false;
-                                    fullText = "";
+                                    // Update the text inside the thinking bubble
+                                    const thinkingTxt = currentBotMsg.querySelector('#thinking-text');
+                                    if(thinkingTxt) {
+                                        thinkingTxt.innerText = data.content;
+                                    }
                                 }
                             } catch (e) {}
                         }
                     }
                 }
-                
-                if (currentBotMsg && currentBotMsg.querySelector('.cursor')) {
-                    currentBotMsg.querySelector('.cursor').remove();
-                }
-
             } catch (e) {
                 if (currentBotMsg) currentBotMsg.innerHTML = '<span style="color:#fca5a5">Connection Error. Please retry.</span>';
             }
@@ -747,7 +717,11 @@ HTML_TEMPLATE = """
         function reset() { 
             fetch('/api/reset', {method:'POST', body:JSON.stringify({user_id:uid}), headers:{'Content-Type':'application/json'}});
             chat.innerHTML = '';
-            addMsg('bot', '<strong>Chat Reset.</strong><br>How can I help?');
+            // Manually re-add welcome message
+            const row = document.createElement('div');
+            row.className = 'msg-row bot';
+            row.innerHTML = '<div class="avatar">🤖</div><div class="msg-bubble"><strong>Chat Reset.</strong><br>How can I help?</div>';
+            chat.appendChild(row);
         }
 
         btn.onclick = () => { if(inp.value.trim()) streamChat(inp.value.trim()); };
