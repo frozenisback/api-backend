@@ -47,52 +47,106 @@ KB = {
         "stake_chat_farmer": {
             "name": "Stake Chat Farmer",
             "access": "@kustchatbot",
-            "price": "Free 3-hour trial",
+            "price": "Free 3-hour trial available for new users",
             "features": [
-                "Autonomous chat generator (Not spam)",
-                "Farms XP/Levels 24/7",
-                "Multi-account support",
-                "Works on all Stake servers"
+                "Autonomous chat generator (not spam — human-like behavioural model)",
+                "Farms XP/Levels 24/7 without interruptions",
+                "Multi-account support for users managing several Stake accounts",
+                "Works on all Stake servers and mirror links",
+                "AI-driven adaptive responses based on mood & chat context",
+                "Low CPU usage, runs entirely in browser through custom extension",
+                "Automatic reconnection if tab reloads or browser restarts",
+                "Hindi setup video provided inside the bot"
             ],
             "setup": [
-                "1. Start bot",
-                "2. Link account",
-                "3. Set mood",
-                "4. Start farming"
+                "1. Start @kustchatbot",
+                "2. If you are new: Tap **Get Your Trial Now**",
+                "3. Enter your real Stake username (CASE-SENSITIVE; must match exactly)",
+                "4. Bot provides an **unpacked extension** (.zip)",
+                "5. Unzip the folder on your PC",
+                "6. Open Chrome → go to **chrome://extensions**",
+                "7. Enable **Developer Mode** (top-right)",
+                "8. Click **Load Unpacked** and select the unzipped extension folder",
+                "9. Open Stake.com or any Stake mirror (example: https://stake.com/casino/games/mines)",
+                "10. Open Extensions panel → enable the Stake Chat Farmer extension",
+                "11. Refresh the Stake page → a popup appears on the left-hand side",
+                "12. If your trial or subscription is active, you will see **Enable AI** → click it",
+                "13. Chat Farmer will begin farming XP/Levels automatically",
+                "14. If trial expired: Open @kustchatbot → /start → Buy Subscription",
+                "15. Enter Stake username again → choose payment method (Crypto or UPI)",
+                "16. UPI = processed manually; Crypto = processed via automated Val/Oxa Pay",
+                "17. Once payment is confirmed, extension instantly activates"
+            ],
+            "notes": [
+                "Username must match Stake exactly — incorrect casing → auto-reject",
+                "Do not rename extension folder; Chrome will not load it",
+                "Bot also shows a **Hindi setup video** for easy onboarding"
             ]
         },
+
         "stake_code_claimer": {
             "name": "Stake Code Claimer",
-            "info": "Monitors channels, claims codes instantly across accounts. 24/7 execution."
+            "info": (
+                "Monitors selected channels, groups, and feeds in real-time and "
+                "claims Stake codes instantly across multiple accounts. Designed "
+                "for 24/7 execution with minimal delays. Works even on high-latency "
+                "connections due to optimized parallel request logic."
+            )
         },
+
         "frozen_music": {
             "name": "Frozen Music Bot",
+            "bot": "@vcmusiclubot",
             "commands": ["/play", "/vplay", "/skip", "/couple", "/tmute"],
             "features": [
-                "High-performance VC music",
-                "Video playback support",
-                "Distributed backend for stability"
+                "High-performance VC music streaming with ultra-low latency",
+                "Video playback support in groups and channels",
+                "Distributed backend: metadata servers, routing servers, playback nodes",
+                "Multi-layer caching for instant replay performance",
+                "Pre-caching when songs are queued → near-zero wait time",
+                "Load-balanced playback nodes (each ~10 concurrent VCs)",
+                "RR (Real-time Redirect) stream fetching + fallback yt-dlp pipeline",
+                "Cloudflare Worker event-based routing for stable global performance"
             ]
         },
+
         "kustify_hosting": {
             "name": "Kustify Hosting",
             "bot": "@kustifybot",
             "plans": {
-                "Ember": "$1.44/mo (0.25 CPU/512MB)",
-                "Flare": "$2.16/mo (0.5 CPU/1GB)",
-                "Inferno": "$3.60/mo (1 CPU/2GB)"
+                "Ember": "$1.44/mo (0.25 CPU / 512MB RAM)",
+                "Flare": "$2.16/mo (0.5 CPU / 1GB RAM)",
+                "Inferno": "$3.60/mo (1 CPU / 2GB RAM)"
             },
-            "info": "Deploy via /host. Stopped bots cost 2 sparks/day."
+            "info": (
+                "Deploy instantly using /host. Designed for Telegram bots, APIs, "
+                "small web servers, and automation tasks. Stopped bots cost 2 sparks/day "
+                "to preserve data and storage integrity. Optimized for developers "
+                "needing low-cost, fast deployment."
+            )
         },
+
         "custom_bots": {
             "name": "Paid Custom Bots",
-            "pricing": "Commands: $2-$5. Music Bots: $4/mo (Tier 1) to $20/mo (Tier 3).",
-            "info": "White-label solutions."
+            "pricing": (
+                "Simple commands: $2–$5 each. Music bots: $4/mo (Tier 1) up to $20/mo (Tier 3). "
+                "Complex systems priced based on features and infrastructure load."
+            ),
+            "info": (
+                "White-label solutions for businesses or personal use. Includes music bots, "
+                "automation bots, management bots, API bots, and highly customized workflows. "
+                "All deployments include updates, monitoring, and optional hosting through Kustify."
+            )
         }
     },
+
     "compliance": {
         "official": ["@kustbots", "@kustbotschat", "@KustDev"],
-        "warn": "Beware of fakes. We NEVER discuss gambling bonuses, drops, or predictions."
+        "warn": (
+            "Beware of impersonators. We NEVER discuss gambling bonuses, drops, "
+            "predictions, weekly/monthly offers, or anything related to promotional gambling content. "
+            "Always verify usernames before interacting."
+        )
     }
 }
 
