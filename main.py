@@ -21,7 +21,7 @@ HEADERS = {
 
 
 def test_prompt(token_len: int):
-    """Send a test request with a prompt containing token_len words."""
+    """Send a test request with detailed logging."""
     prompt = "word " * token_len
 
     payload = {
@@ -31,17 +31,28 @@ def test_prompt(token_len: int):
         ]
     }
 
+    print("====================================")
+    print(f"TESTING TOKEN LENGTH → {token_len}")
+    print("URL:", API_URL)
+    print("PAYLOAD:", payload)
+    print("HEADERS:", HEADERS)
+
     try:
         r = requests.post(API_URL, json=payload, headers=HEADERS, timeout=12)
+
+        print("STATUS CODE:", r.status_code)
+        print("RESPONSE TEXT:", r.text)
+
+        # Successful HTTP but provider error inside?
         if r.status_code == 200:
             return True
-        return False
-    except Exception:
+
         return False
 
+    except Exception as e:
+        print("REQUEST EXCEPTION:", str(e))
+        return False
 
-def sse(msg):
-    return f"data: {msg}\n\n"
 
 
 @app.route("/api")
