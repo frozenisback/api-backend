@@ -1,5 +1,5 @@
 # main.py
-# KUST BOTS OFFICIAL SUPPORT SYSTEM (Production Release)
+# KUST BOTS OFFICIAL SUPPORT SYSTEM (Production Release - Debug Enabled)
 # Single-File Flask Application with Server-Sent Events (SSE) Streaming
 # Features: Real-time Typing, Tool Execution Visuals, Premium UI, Auto-Healing Sessions.
 
@@ -10,15 +10,18 @@ import json
 import uuid
 import logging
 import requests
+import sys
 from flask import Flask, request, jsonify, Response, render_template_string, stream_with_context
 
 # ----------------------------
 # 1. Configuration & Logging
 # ----------------------------
+# Configure logging to flush immediately to stdout (crucial for Heroku)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] KUST: %(message)s",
-    datefmt="%H:%M:%S"
+    datefmt="%H:%M:%S",
+    stream=sys.stdout
 )
 logger = logging.getLogger("kust-support")
 
@@ -29,13 +32,17 @@ BASE_URL = os.getenv("INFERENCE_URL", "")
 
 # Validate Critical Config
 if not (INFERENCE_KEY and INFERENCE_MODEL_ID and BASE_URL):
-    logger.warning("⚠️ CRITICAL: Missing INFERENCE env vars. Bot will not reply correctly.")
+    logger.error("⚠️ CRITICAL: Missing INFERENCE env vars. Bot will not reply correctly.")
 
+# Ensure URL is correctly formatted
 API_URL = f"{BASE_URL.rstrip('/')}/v1/chat/completions"
 HEADERS = {
     "Authorization": f"Bearer {INFERENCE_KEY}",
     "Content-Type": "application/json"
 }
+
+logger.info(f"System Initialized. Target API: {API_URL}")
+logger.info(f"Target Model: {INFERENCE_MODEL_ID}")
 
 # ----------------------------
 # 2. Knowledge Base (Business Logic)
@@ -183,42 +190,67 @@ def call_inference_stream(messages):
         "temperature": 0.5
     }
     
+    logger.info(f"Initiating Inference Call to {API_URL}")
+    
     try:
         # 1. Start Request
         with requests.post(API_URL, json=payload, headers=HEADERS, stream=True, timeout=60) as r:
+            logger.info(f"Inference API Response: {r.status_code}")
+            
             if r.status_code != 200:
-                yield f"data: {json.dumps({'type': 'error', 'content': f'API Error {r.status_code}'})}\n\n"
+                error_msg = r.text
+                logger.error(f"Upstream API Error: {r.status_code} - {error_msg}")
+                yield f"data: {json.dumps({'type': 'error', 'content': f'API Error {r.status_code}: {error_msg}'})}\n\n"
                 return
 
             full_content = ""
+            chunk_count = 0
             
             # 2. Process Stream
             for line in r.iter_lines():
                 if not line: continue
                 line = line.decode('utf-8')
+                
+                # Debug logging for the first few lines to verify format
+                if chunk_count < 3:
+                    logger.info(f"Raw Stream Line: {line}")
+                
                 if line.startswith('data: '):
                     data_str = line[6:]
                     if data_str.strip() == '[DONE]':
+                        logger.info("Stream received [DONE] signal.")
                         break
                     try:
                         chunk_json = json.loads(data_str)
-                        # Compatible with OpenAI format
-                        delta = chunk_json['choices'][0]['delta'].get('content', '')
+                        
+                        # Handle standard OpenAI format
+                        delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                        
+                        # Handle potential alternative format (some providers differ)
+                        if not delta and 'content' in chunk_json:
+                            delta = chunk_json['content']
+
                         if delta:
+                            chunk_count += 1
                             full_content += delta
                             # Yield token to frontend
                             yield f"data: {json.dumps({'type': 'token', 'content': delta})}\n\n"
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"Failed to parse chunk: {data_str} | Error: {e}")
+            
+            if chunk_count == 0:
+                logger.warning("Stream finished but NO tokens were parsed. Check API response format.")
             
             # 3. Check for Tool Use in the accumulated content
-            # Heuristic: If content looks like a JSON tool call
             stripped = full_content.strip()
+            # Heuristic: If content looks like a JSON tool call
             if stripped.startswith('{') and '"tool"' in stripped and stripped.endswith('}'):
                 try:
                     tool_data = json.loads(stripped)
                     tool_name = tool_data.get("tool")
                     query = tool_data.get("query")
+                    
+                    logger.info(f"Tool Triggered: {tool_name} with query: {query}")
                     
                     # Notify Frontend: Tool Started
                     yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'input': query})}\n\n"
@@ -229,6 +261,8 @@ def call_inference_stream(messages):
                         tool_result = search_kb(query)
                     else:
                         tool_result = "Tool not found."
+                    
+                    logger.info(f"Tool Result: {tool_result[:50]}...")
                     
                     # Notify Frontend: Tool Done
                     yield f"data: {json.dumps({'type': 'tool_end', 'result': 'Data retrieved.'})}\n\n"
@@ -244,11 +278,12 @@ def call_inference_stream(messages):
                     
                 except json.JSONDecodeError:
                     # Not valid JSON, just treat as text
+                    logger.info("Response looked like JSON but failed decode, treating as text.")
                     pass
 
     except Exception as e:
-        logger.error(f"Stream Error: {e}")
-        yield f"data: {json.dumps({'type': 'error', 'content': 'Connection interrupted.'})}\n\n"
+        logger.exception(f"Stream Exception: {e}")
+        yield f"data: {json.dumps({'type': 'error', 'content': 'Internal Connection Error.'})}\n\n"
 
 # ----------------------------
 # 6. Routes
@@ -256,6 +291,7 @@ def call_inference_stream(messages):
 
 @app.route("/")
 def index():
+    logger.info(f"Page Load - IP: {request.remote_addr}")
     return render_template_string(HTML_TEMPLATE)
 
 @app.route("/chat/stream", methods=["POST"])
@@ -263,6 +299,8 @@ def chat_stream():
     data = request.json
     user_msg = data.get("message")
     sid = data.get("session_id", str(uuid.uuid4()))
+    
+    logger.info(f"Session {sid[:8]} - User Msg: {user_msg}")
     
     if not user_msg:
         return jsonify({"error": "No message"}), 400
@@ -272,7 +310,7 @@ def chat_stream():
     history.append({"role": "user", "content": user_msg})
 
     def generate():
-        # Yield a ping to confirm connection
+        # Yield a ping to confirm connection immediately
         yield f"data: {json.dumps({'type': 'ping'})}\n\n"
         
         full_response_accumulator = ""
@@ -294,13 +332,22 @@ def chat_stream():
         
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
-    return Response(stream_with_context(generate()), mimetype='text/event-stream')
+    return Response(
+        stream_with_context(generate()), 
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Connection': 'keep-alive'
+        }
+    )
 
 @app.route("/api/reset", methods=["POST"])
 def reset():
     sid = request.json.get("session_id")
     if sid in SESSIONS:
         del SESSIONS[sid]
+        logger.info(f"Session {sid[:8]} cleared.")
     return jsonify({"status": "cleared", "new_id": str(uuid.uuid4())})
 
 # ----------------------------
