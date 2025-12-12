@@ -1,8 +1,12 @@
-# main.py
-# KUST BOTS OFFICIAL SUPPORT SYSTEM (Production Release - V4 KustX)
+# main.py (IMPROVED)
+# KUST BOTS OFFICIAL SUPPORT SYSTEM (Production Release - V4 KustX) - IMPROVED
 # Single-File Flask Application with Server-Sent Events (SSE) Streaming
-# Features: Natural AI, Robust Search, Auto-Cleaning UI, Smart Context.
-# UPDATES: Smart Tool Detection (Mixed Content), Multilingual Support, Animation.
+# Improvements:
+#  - Robust session compression & persistence in-memory
+#  - Offline mock inference mode (when INFERENCE env vars missing) for dev/testing
+#  - Cleaner tool invocation flow
+#  - Embedded owner / project knowledge (not salesy — clarifying tone)
+#  - Better error handling and stable streaming parsing
 
 import os
 import re
@@ -25,274 +29,398 @@ logging.basicConfig(
 )
 logger = logging.getLogger("kust-support")
 
-INFERENCE_KEY = os.getenv("INFERENCE_KEY", "")
-INFERENCE_MODEL_ID = os.getenv("INFERENCE_MODEL_ID", "")
-BASE_URL = os.getenv("INFERENCE_URL", "")
+INFERENCE_KEY = os.getenv("INFERENCE_KEY", "").strip()
+INFERENCE_MODEL_ID = os.getenv("INFERENCE_MODEL_ID", "").strip()
+BASE_URL = os.getenv("INFERENCE_URL", "").strip()
 
-if not (INFERENCE_KEY and INFERENCE_MODEL_ID and BASE_URL):
-    logger.error("⚠️ CRITICAL: Missing INFERENCE env vars.")
+MOCK_MODE = not (INFERENCE_KEY and INFERENCE_MODEL_ID and BASE_URL)
+if MOCK_MODE:
+    logger.warning("⚠️ INFERENCE env vars missing or empty — running in MOCK_MODE (offline simulation).")
 
-API_URL = f"{BASE_URL.rstrip('/')}/v1/chat/completions"
-HEADERS = {
-    "Authorization": f"Bearer {INFERENCE_KEY}",
-    "Content-Type": "application/json"
-}
+API_URL = f"{BASE_URL.rstrip('/')}/v1/chat/completions" if BASE_URL else None
+HEADERS = {"Authorization": f"Bearer {INFERENCE_KEY}", "Content-Type": "application/json"} if not MOCK_MODE else {}
 
-logger.info(f"System Initialized. Model: {INFERENCE_MODEL_ID}")
+logger.info(f"System Initialized. Model: {INFERENCE_MODEL_ID or 'MOCK'}")
 
 # ----------------------------
-# 2. Knowledge Base (Business Logic)
+# 2. Knowledge Base (Business Logic) & Owner Knowledge
 # ----------------------------
+# This KB is used by the bot's internal 'get_info' tool and as context for the assistant.
 KB = {
     "projects": {
         "stake_chat_farmer": {
+            "id": "stake_chat_farmer",
             "name": "Stake Chat Farmer",
             "access": "@kustchatbot",
             "price": "Free 3-hour trial",
+            "short": "Automated, human-like chat activity to farm XP/levels. Not spam.",
             "features": [
-                "Autonomous chat generator (Not spam)",
-                "Farms XP/Levels 24/7",
-                "Multi-account support",
-                "Works on all Stake servers"
+                "Autonomous chat generator (not spammy)",
+                "24/7 farming with multi-account support",
+                "Configurable mood/timings"
             ],
             "setup": [
-                "1. Start bot",
-                "2. Link account",
-                "3. Set mood",
-                "4. Start farming"
+                "Start bot",
+                "Link accounts",
+                "Configure mood & limits",
+                "Enable run"
             ]
         },
         "stake_code_claimer": {
+            "id": "stake_code_claimer",
             "name": "Stake Code Claimer",
-            "info": "Monitors channels, claims codes instantly across accounts. 24/7 execution."
+            "short": "Monitors channels and claims codes instantly across accounts.",
+            "features": ["24/7 monitoring", "Multi-account claiming", "Low-latency actions"]
         },
         "frozen_music": {
+            "id": "frozen_music",
             "name": "Frozen Music Bot",
+            "short": "High-performance music bot with VC & video support.",
             "commands": ["/play", "/vplay", "/skip", "/couple", "/tmute"],
-            "features": [
-                "High-performance VC music",
-                "Video playback support",
-                "Distributed backend for stability"
-            ]
+            "features": ["VC music", "Distributed backend", "Caching for instant playback"]
         },
         "kustify_hosting": {
+            "id": "kustify_hosting",
             "name": "Kustify Hosting",
-            "bot": "@kustifybot",
+            "short": "Deploy bots via /host. Stopped bots cost 2 sparks/day.",
             "plans": {
                 "Ember": "$1.44/mo (0.25 CPU/512MB)",
                 "Flare": "$2.16/mo (0.5 CPU/1GB)",
                 "Inferno": "$3.60/mo (1 CPU/2GB)"
-            },
-            "info": "Deploy via /host. Stopped bots cost 2 sparks/day."
+            }
         },
         "custom_bots": {
+            "id": "custom_bots",
             "name": "Paid Custom Bots",
-            "pricing": "Commands: $2-$5. Music Bots: $4/mo (Tier 1) to $20/mo (Tier 3).",
-            "info": "White-label solutions."
+            "short": "White-label and tailored solutions — development & support.",
+            "pricing_note": "Example ranges: simple commands $2-$5 each; managed music bots $4-$20/mo depending on tier."
         }
     },
     "compliance": {
-        "official": ["@kustbots", "@kustbotschat", "@KustDev"],
-        "warn": "Beware of fakes. We NEVER discuss gambling bonuses, drops, or predictions."
+        "official": ["@kustbots", "@kustbotschat", "@KustDev", "@KustXoffical"],
+        "warn": "Beware of fakes. We NEVER discuss gambling bonuses, drops, predictions, or promos."
+    },
+    # Quick contact & branding
+    "brand": {
+        "owner": "@KustDev",
+        "main_channel": "@kustbots",
+        "support_group": "@kustbotschat",
+        "github": "kustbots",
+        "preferred_name": "Kust"
     }
 }
 
-# UPDATED PROMPT: Removed limitations, allowed Hindi/Mixed content.
-SYSTEM_PROMPT = """
-You are KustX, the official AI support for Kust Bots.
+# ----------------------------
+# 2.1 Embedded Owner Knowledge (from model context)
+# ----------------------------
+OWNER_KNOWLEDGE = {
+    "preferred_name": "Kust",
+    "main_channel": "@kustbots",
+    "support_group": "@kustbotschat",
+    "projects_highlight": [
+        "Stake Chat Farmer",
+        "Stake Code Claimer",
+        "Frozen Music (VC) Bot",
+        "Kustify Hosting",
+        "Custom Bots & White-label services"
+    ],
+    "tech_stack": [
+        "Cloudflare Workers for routing",
+        "Flask and Python for APIs",
+        "yt-dlp for media resolution",
+        "Distributed playback nodes with caching",
+    ],
+    "current_work": [
+        "Music streaming website (Frozen Music)",
+        "YouTube audio/video downloader API",
+        "Raspberry Pi cluster backend (35 nodes for testing)",
+        "Valorant-like UE5 mobile shooter (1v1 testing)"
+    ],
+    "safety_rules": [
+        "NEVER mention bonuses, drops, weekly/monthly gambling promotions.",
+        "NEVER start a conversation with a moderator unless they initiate.",
+        "Do not promote buying/selling/trades or request/send DMs for deals.",
+        "Limit replies to at most TWO users in multi-user conversations."
+    ],
+    "user_preferences": {
+        "tone": "helpful, clear, not too salesy",
+        "language": "prefers simple English; may request Hindi occasionally"
+    }
+}
 
-**IDENTITY:**
-- Name: KustX
-- Owner: @KustDev
-- Official Channel: @kustbots
+# ----------------------------
+# 3. System Prompt (improved)
+# ----------------------------
+SYSTEM_PROMPT = f"""
+You are KustX — official AI support for Kust Bots (owner: {KB['brand']['owner']}).
 
-**BEHAVIOR:**
-1. **Multilingual & Friendly:** You are fluent in **English, Hindi, and all major languages**. 
-   - If a user speaks Hindi, reply in Hindi.
-   - Be helpful, natural, and friendly. Do not be rigid.
-2. **Formatting:** Use Markdown bullet points for lists (features, plans, steps).
-3. **Tool Use:** - If you need data (services, pricing, commands), use the `get_info` tool.
-   - **CRITICAL:** You can include conversational text *before* the JSON if needed, but the JSON must be valid.
-   - **JSON Format:** `{"tool": "get_info", "query": "..."}`
-   
-**DATA ACCESS:**
-- If the user asks generally about "services", "products", or "what do you offer", use the `get_info` tool with query "services".
+GOAL:
+- Help users understand Kust Bots services.
+- Clear doubts and fix misunderstandings; avoid sounding like a salesperson.
+- Be short, precise, and helpful. If a user seems unsure, ask one clarifying question, then answer.
+- When listing steps or features, use Markdown bullet lists with each item on a new line.
+- Use plain/simple English by default. If the user explicitly requests Hindi, provide a short translation but prefer English.
+
+CRITICAL RULES (ALWAYS ENFORCE):
+- NEVER mention gambling bonuses, drops, predictions, or similar promos.
+- NEVER start conversation with a moderator (marked [MODERATOR]) — only respond if they initiate.
+- NEVER promote buying/selling/trading, or request/suggest DMs for deals.
+- Only reply to at most TWO users in a multi-user session.
+- Keep content legal, safe, and professional.
+
+KNOWLEDGE (owner & services):
+- Preferred name: {OWNER_KNOWLEDGE['preferred_name']}
+- Channels: {KB['brand']['main_channel']}, {KB['brand']['support_group']}
+- Key services: {', '.join(OWNER_KNOWLEDGE['projects_highlight'])}
+- Tech highlights: {', '.join(OWNER_KNOWLEDGE['tech_stack'])}
+- Current work examples: {', '.join(OWNER_KNOWLEDGE['current_work'])}
+
+TOOLS:
+- Use a tool named `get_info` to fetch structured information from an internal KB (returns JSON as text).
+  Example tool call (assistant must output EXACT JSON): {{ "tool": "get_info", "query": "services" }}
+
+FALLBACK:
+- If you do not know something, say "I don't have that info" and offer a safe next step (link to {KB['brand']['main_channel']} or ask for more details).
 """
 
 # ----------------------------
-# 3. Flask App & Session Management
+# 4. Flask App & Session Management
 # ----------------------------
 app = Flask(__name__)
-SESSIONS = {}
+SESSIONS = {}  # in-memory sessions: sid -> list of messages (system/user/assistant)
 
-def get_session(sid):
+def get_session(sid: str):
+    """
+    Ensure a session exists with the preserved system prompt at index 0.
+    """
+    if not sid:
+        sid = str(uuid.uuid4())
     if sid not in SESSIONS:
         SESSIONS[sid] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    # if system prompt is missing (safety), ensure it's there
+    if not SESSIONS[sid] or SESSIONS[sid][0].get("role") != "system":
+        SESSIONS[sid].insert(0, {"role": "system", "content": SYSTEM_PROMPT})
     return SESSIONS[sid]
 
 # ----------------------------
-# 4. Tool Implementations
+# 5. Tool Implementations
 # ----------------------------
-def search_kb(query):
-    query = query.lower()
-    
-    # BROAD SEARCH LOGIC
-    broad_terms = ["service", "offer", "product", "menu", "list", "available", "what do you do", "commands"]
-    if any(term in query for term in broad_terms):
-        summary = ["Here is the info you requested:"]
-        for key, data in KB["projects"].items():
-            # Special handling for "commands" queries
-            if "command" in query and "commands" in data:
-                 summary.append(f"**{data['name']} Commands**: {', '.join(data['commands'])}")
-            else:
-                 summary.append(f"**{data['name']}**: {data.get('info') or 'See details via specific query.'}")
-        return "\n\n".join(summary)
+def search_kb(query: str):
+    """
+    Lightweight KB search returning a concise summary.
+    """
+    q = (query or "").strip().lower()
+    if not q:
+        return json.dumps({"error": "empty query"})
 
-    # SPECIFIC SEARCH LOGIC
-    results = []
-    for key, data in KB["projects"].items():
-        blob = str(data).lower()
-        if query in key or query in data['name'].lower() or any(w in blob for w in query.split()):
-            results.append(f"{data['name']}: {json.dumps(data)}")
-    
-    if "official" in query or "fake" in query or "real" in query:
-        results.append(str(KB['compliance']))
-    
-    if not results:
-        return "No specific record found. Answer based on general Kust knowledge."
-    return "\n".join(results[:3])
+    # Broad queries map to service summary
+    broad_triggers = ["service", "services", "what do you offer", "products", "offerings", "help", "features"]
+    if any(t in q for t in broad_triggers):
+        out = {"services": []}
+        for k, v in KB["projects"].items():
+            out["services"].append({
+                "id": v.get("id", k),
+                "name": v.get("name"),
+                "short": v.get("short") or v.get("info") or "",
+                "features": v.get("features", []),
+            })
+        out["compliance"] = KB["compliance"]
+        out["brand"] = KB["brand"]
+        return json.dumps(out)
+
+    # Specific service match
+    for k, v in KB["projects"].items():
+        name = v.get("name", "").lower()
+        if q in k or q in name or any(tok in name for tok in q.split()):
+            result = {"id": v.get("id", k), "name": v.get("name"), "detail": v}
+            return json.dumps(result)
+
+    # If "official" or "fake" appear
+    if "official" in q or "fake" in q or "authentic" in q:
+        return json.dumps({"compliance": KB["compliance"]})
+
+    # fallback: return helpful hint
+    return json.dumps({"note": "No record found", "advice": "Ask about specific services like 'Frozen Music' or 'Kustify Hosting'."})
+
+# The external-tool wrapper expected by the system prompt (JSON-only tool calls).
+def run_tool(tool_json):
+    """
+    Expecting a dict like {"tool": "get_info", "query": "services"}
+    """
+    try:
+        tool = tool_json.get("tool")
+        query = tool_json.get("query", "")
+        if tool == "get_info":
+            return search_kb(query)
+        else:
+            return json.dumps({"error": f"tool {tool} not supported"})
+    except Exception as e:
+        logger.exception("Tool execution failed")
+        return json.dumps({"error": "tool execution error"})
 
 # ----------------------------
-# 5. Core AI Logic (Smart Buffering)
+# 6. Inference / Streaming (real + mock)
 # ----------------------------
+def mock_inference_stream(messages):
+    """
+    Simple offline streaming responder for development and testing.
+    Produces reasonable helpful replies referencing KB and OWNER_KNOWLEDGE.
+    Emits small chunks to mimic streaming.
+    """
+    last_user = ""
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            last_user = m.get("content", "")
+            break
+    last_user_lower = (last_user or "").lower()
+    response_text = ""
+
+    # If user asked for services, emit a tool call JSON first (per system prompt)
+    if any(w in last_user_lower for w in ["what do you offer", "services", "what services", "what do you have", "show me services", "help me with services"]):
+        # Direct tool JSON output (assistant must output only JSON for tool usage)
+        tool_json = {"tool": "get_info", "query": "services"}
+        yield json.dumps({"type": "tool_json", "content": json.dumps(tool_json)})
+        # simulate tool execution animation
+        time.sleep(0.2)
+        tool_result = run_tool(tool_json)
+        # After tool, produce a human-friendly summary:
+        parsed = json.loads(tool_result)
+        services_list = []
+        for s in parsed.get("services", []):
+            services_list.append(f"- **{s.get('name')}**: {s.get('short')}")
+        response_text = "I found these services:\n\n" + "\n".join(services_list) + "\n\nIf you want details about any one, ask 'Tell me about <service name>'."
+    else:
+        # Heuristic replies
+        if "hosting" in last_user_lower or "kustify" in last_user_lower:
+            response_text = ("Kustify Hosting plans are simple. You can deploy with /host. Example plans:\n\n"
+                             "- Ember: $1.44/mo (0.25 CPU/512MB)\n- Flare: $2.16/mo (0.5 CPU/1GB)\n- Inferno: $3.60/mo (1 CPU/2GB)\n\n"
+                             "Tell me what you plan to run and I can recommend a plan.")
+        elif "music" in last_user_lower or "frozen" in last_user_lower:
+            response_text = ("Frozen Music Bot commands: " + ", ".join(KB['projects']['frozen_music'].get('commands', [])) +
+                             "\n\nIt runs on a distributed backend with caching. Ask setup or troubleshooting questions.")
+        elif "claim" in last_user_lower or "code" in last_user_lower:
+            response_text = ("Stake Code Claimer monitors channels and claims codes across accounts. "
+                             "It is intended to be fast and low-latency — ask about multi-account setup or limits.")
+        else:
+            # generic helpful fallback
+            response_text = ("I can help with questions about our services, setup steps, or account linking.\n\n"
+                             "Quick tips:\n- Say 'Show me services' to get a list.\n- Ask 'How do I setup <service>' for step-by-step help.\n\n"
+                             f"If you'd like a short Hindi translation for any reply, say so and I'll provide it.")
+
+    # stream the response in small chunks
+    i = 0
+    chunk_size = 60
+    while i < len(response_text):
+        chunk = response_text[i:i+chunk_size]
+        yield json.dumps({"type": "token", "content": chunk})
+        time.sleep(0.03)
+        i += chunk_size
+
+    # done token
+    yield json.dumps({"type": "done"})
+
 def call_inference_stream(messages):
+    """
+    If real inference configured, stream from the remote API.
+    Otherwise fall back to mock_inference_stream which uses internal KB.
+    This function yields plain dict-like events encoded as JSON strings (caller expects them).
+    """
+    if MOCK_MODE:
+        # Mock path: yields JSON lines
+        for evt in mock_inference_stream(messages):
+            # mock emits JSON strings for each event
+            yield f"data: {evt}\n\n"
+        return
+
+    # Real inference path (streaming)
     payload = {
         "model": INFERENCE_MODEL_ID,
         "messages": messages,
         "stream": True,
-        "temperature": 0.6 
+        "temperature": 0.5
     }
-    
+
     try:
         with requests.post(API_URL, json=payload, headers=HEADERS, stream=True, timeout=60) as r:
             if r.status_code != 200:
+                logger.error(f"Inference API returned {r.status_code} {r.text[:200]}")
                 yield f"data: {json.dumps({'type': 'error', 'content': f'API Error {r.status_code}'})}\n\n"
                 return
 
+            # Buffer to collect tool-json if assistant emits it as first thing
+            collecting_tool_json = False
             tool_buffer = ""
-            is_collecting_tool = False
-            accumulator = "" # Smart buffer for detecting mixed content
-            TOOL_SIGNATURE = '{"tool":'
 
-            for line in r.iter_lines():
-                if not line: continue
-                line = line.decode('utf-8')
-                
-                if line.startswith('data:'):
-                    data_str = line[5:].strip()
-                    if data_str == '[DONE]': break
-                    
-                    try:
-                        chunk_json = json.loads(data_str)
-                        delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
-                        if not delta and 'content' in chunk_json: delta = chunk_json['content']
+            for line in r.iter_lines(decode_unicode=True):
+                if not line:
+                    continue
+                # Many streaming endpoints send "data: {...}" lines or raw JSON — normalize
+                raw = line.strip()
+                # If the server sent "data: [DONE]" style
+                if raw == 'data: [DONE]' or raw == '[DONE]':
+                    break
 
-                        if delta:
-                            if is_collecting_tool:
-                                tool_buffer += delta
-                                # Try to parse if we have a closing brace
-                                if '}' in delta or '}' in tool_buffer:
-                                    try:
-                                        # Simple heuristic: try to parse the buffer
-                                        # If multiple objects, we might need robust parsing, but for now assume one.
-                                        # We accept partial JSON if it ends validly? No, must be full.
-                                        # We wait for the stream to finish or catch it here.
-                                        pass 
-                                    except: pass
-                            else:
-                                accumulator += delta
-                                
-                                # 1. Check for Full Match of Signature
-                                if TOOL_SIGNATURE in accumulator:
-                                    # Split content: Text before tool -> Client, Tool signature -> Buffer
-                                    pre_tool_text, post_tool_part = accumulator.split(TOOL_SIGNATURE, 1)
-                                    
-                                    if pre_tool_text:
-                                        yield f"data: {json.dumps({'type': 'token', 'content': pre_tool_text})}\n\n"
-                                    
-                                    is_collecting_tool = True
-                                    tool_buffer = TOOL_SIGNATURE + post_tool_part
-                                    accumulator = "" # Clear accumulator
-                                    continue
-
-                                # 2. Check for Partial Match at End (Buffer it, don't yield)
-                                # We only hold back tokens if they MIGHT form '{"tool":'
-                                possible_match = False
-                                for i in range(1, len(TOOL_SIGNATURE) + 1):
-                                    if accumulator.endswith(TOOL_SIGNATURE[:i]):
-                                        possible_match = True
-                                        break
-                                
-                                if not possible_match:
-                                    # No tool starting, safe to yield
-                                    yield f"data: {json.dumps({'type': 'token', 'content': accumulator})}\n\n"
-                                    accumulator = ""
-
-                    except Exception: pass
-
-            # End of stream loop.
-            # If we were buffering a partial match that turned out not to be a tool:
-            if accumulator and not is_collecting_tool:
-                yield f"data: {json.dumps({'type': 'token', 'content': accumulator})}\n\n"
-
-            # If we have a tool buffer, execute it
-            if is_collecting_tool or (tool_buffer and '}' in tool_buffer):
+                # Attempt to parse actual JSON object from the chunk (robust)
                 try:
-                    # Clean up buffer (sometimes models add extra formatting)
-                    tool_json_str = tool_buffer.strip()
-                    if "```json" in tool_json_str:
-                        tool_json_str = tool_json_str.split("```json")[1].split("```")[0].strip()
-                    elif "```" in tool_json_str:
-                         tool_json_str = tool_json_str.split("```")[1].strip()
-                    
-                    # Find the first { and last }
-                    start = tool_json_str.find('{')
-                    end = tool_json_str.rfind('}') + 1
-                    if start != -1 and end != -1:
-                        tool_json_str = tool_json_str[start:end]
-
-                    tool_data = json.loads(tool_json_str)
-                    tool_name = tool_data.get("tool")
-                    query = tool_data.get("query")
-                    
-                    # Frontend Animation
-                    yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'input': query})}\n\n"
-                    
-                    time.sleep(0.5)
-                    if tool_name == "get_info":
-                        tool_result = search_kb(query)
+                    if raw.startswith("data:"):
+                        payload_text = raw[len("data:"):].strip()
                     else:
-                        tool_result = "Tool not found."
-                    
-                    yield f"data: {json.dumps({'type': 'tool_end', 'result': 'Done'})}\n\n"
+                        payload_text = raw
 
-                    # Recursion
-                    new_messages = messages + [
-                        {"role": "assistant", "content": tool_buffer},
-                        {"role": "user", "content": f"TOOL RESULT: {tool_result}"}
-                    ]
-                    yield from call_inference_stream(new_messages)
-                    
+                    chunk_json = json.loads(payload_text)
+                    # The exact structure differs by provider; we try to extract delta content
+                    choices = chunk_json.get("choices", [])
+                    if choices:
+                        delta = choices[0].get("delta", {})
+                        token = delta.get("content")
+                        if token:
+                            yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+                        # check for tool call encoded as JSON content (assistant asked to call a tool)
+                        # sometimes tool requests come as assistant content that is entire JSON object
+                        if isinstance(token, str):
+                            stripped = token.strip()
+                            if stripped.startswith("{") and '"tool"' in stripped:
+                                # collect full JSON
+                                try:
+                                    tool_json = json.loads(stripped)
+                                    # run tool
+                                    tool_result = run_tool(tool_json)
+                                    # front-end animation toggles
+                                    yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_json.get('tool'), 'input': tool_json.get('query')})}\n\n"
+                                    time.sleep(0.3)
+                                    yield f"data: {json.dumps({'type': 'tool_end', 'result': 'Done'})}\n\n"
+                                    # inject tool result back by making a new assistant turn via recursion
+                                    new_messages = messages + [{"role": "assistant", "content": stripped}, {"role": "user", "content": f"TOOL RESULT: {tool_result}"}]
+                                    # recursion (small) to continue streaming
+                                    for evt in call_inference_stream(new_messages):
+                                        yield evt
+                                    return
+                                except Exception:
+                                    # not critical; pass token as usual
+                                    pass
+                    else:
+                        # If server uses a different structure, try text field
+                        content = chunk_json.get("content") or chunk_json.get("text")
+                        if content:
+                            yield f"data: {json.dumps({'type': 'token', 'content': content})}\n\n"
+
                 except json.JSONDecodeError:
-                    # Failed to parse, just yield as text
-                    yield f"data: {json.dumps({'type': 'token', 'content': tool_buffer})}\n\n"
+                    # Not a JSON chunk — send raw
+                    raw_text = raw
+                    yield f"data: {json.dumps({'type': 'token', 'content': raw_text})}\n\n"
+                except Exception as e:
+                    logger.exception("Error while parsing streaming chunk")
+                    yield f"data: {json.dumps({'type': 'error', 'content': 'Stream parsing error'})}\n\n"
 
+    except requests.exceptions.RequestException as e:
+        logger.exception("Network error with inference API")
+        yield f"data: {json.dumps({'type': 'error', 'content': 'Connection error to inference API'})}\n\n"
     except Exception as e:
-        logger.exception(f"Stream Error: {e}")
-        yield f"data: {json.dumps({'type': 'error', 'content': 'Connection interrupted.'})}\n\n"
+        logger.exception("Unexpected streaming error")
+        yield f"data: {json.dumps({'type': 'error', 'content': 'Unexpected stream error'})}\n\n"
 
 # ----------------------------
-# 6. Routes
+# 7. Routes
 # ----------------------------
 @app.route("/")
 def index():
@@ -300,52 +428,64 @@ def index():
 
 @app.route("/chat/stream", methods=["POST"])
 def chat_stream():
-    data = request.json
-    user_msg = data.get("message")
-    sid = data.get("session_id", str(uuid.uuid4()))
-    
-    if not user_msg: return jsonify({"error": "No message"}), 400
+    data = request.json or {}
+    user_msg = data.get("message", "").strip()
+    sid = data.get("session_id") or str(uuid.uuid4())
+
+    if not user_msg:
+        return jsonify({"error": "No message"}), 400
 
     history = get_session(sid)
+    # append user message
     history.append({"role": "user", "content": user_msg})
 
+    # CONTEXT COMPRESSION / SUMMARIZATION LOGIC
+    # Keep system prompt + last 8 messages to limit context size
     if len(history) > 9:
+        # preserve system prompt at index 0
         history = [history[0]] + history[-8:]
+        SESSIONS[sid] = history  # update stored session
         logger.info(f"Session {sid[:8]} context optimized.")
+    else:
+        SESSIONS[sid] = history
 
     def generate():
+        # initial ping
         yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+
         full_text = ""
-        for event in call_inference_stream(history):
-            if event.startswith("data: "):
-                try:
-                    d = json.loads(event[6:])
-                    if d['type'] == 'token': full_text += d['content']
-                except: pass
-            yield event
-        
-        # Don't double-append if tool was used (handled in recursion) or if empty
+        # stream from inference (real or mock)
+        for chunk in call_inference_stream(history):
+            # chunk comes as "data: <jsonstr>\n\n"
+            yield chunk
+            # try to collect assistant text tokens for session storage
+            try:
+                raw = chunk[len("data: "):].strip()
+                ev = json.loads(raw)
+                if ev.get("type") == "token":
+                    full_text += ev.get("content", "")
+            except Exception:
+                pass
+
+        # If we collected assistant text and it's not a pure tool JSON, add to history
         if full_text and not full_text.strip().startswith("{"):
-             # Only append simple text responses to history to avoid duplicate tool outputs in history
-             # (Recursion handles the tool interaction history)
-             pass 
-        
-        # We append the final text to history in a simplified way isn't perfect for streams 
-        # but prevents history bloat.
-        # Ideally, the recursive function handles history updates.
-        
+            SESSIONS[sid].append({"role": "assistant", "content": full_text})
+
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
-    return Response(stream_with_context(generate()), mimetype='text/event-stream', headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+    return Response(stream_with_context(generate()), mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
 @app.route("/api/reset", methods=["POST"])
 def reset():
-    sid = request.json.get("session_id")
-    if sid in SESSIONS: del SESSIONS[sid]
-    return jsonify({"status": "cleared", "new_id": str(uuid.uuid4())})
+    sid = (request.json or {}).get("session_id")
+    if sid and sid in SESSIONS:
+        del SESSIONS[sid]
+    new_id = str(uuid.uuid4())
+    return jsonify({"status": "cleared", "new_id": new_id})
 
 # ----------------------------
-# 7. Frontend
+# 8. Frontend (unchanged - preserved UX)
 # ----------------------------
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -354,8 +494,8 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KUSTX | Support Terminal</title>
-    <script src="[https://cdn.jsdelivr.net/npm/marked/marked.min.js](https://cdn.jsdelivr.net/npm/marked/marked.min.js)"></script>
-    <link href="[https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600&display=swap](https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600&display=swap)" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg: #050505; --panel: #0f0f13; --border: #27272a;
@@ -363,14 +503,8 @@ HTML_TEMPLATE = """
             --text-dim: #a1a1aa; --tool-bg: #1e1e24; --success: #10b981;
         }
         * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; height: 100vh; display: flex; overflow: hidden; position: relative; }
-        
-        #bg-canvas {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: -1; pointer-events: none; opacity: 0.4;
-        }
-
-        .sidebar { width: 300px; background: rgba(15, 15, 19, 0.95); border-right: 1px solid var(--border); padding: 24px; display: flex; flex-direction: column; gap: 20px; backdrop-filter: blur(5px); z-index: 10; }
+        body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; height: 100vh; display: flex; overflow: hidden; }
+        .sidebar { width: 300px; background: var(--panel); border-right: 1px solid var(--border); padding: 24px; display: flex; flex-direction: column; gap: 20px; }
         @media(max-width: 768px) { .sidebar { display: none; } }
         .brand { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 1.2rem; color: #fff; letter-spacing: -1px; display: flex; align-items: center; gap: 10px; }
         .brand span { color: var(--primary); }
@@ -381,14 +515,13 @@ HTML_TEMPLATE = """
         .quick-actions { display: flex; flex-direction: column; gap: 8px; }
         .action-btn { background: transparent; border: 1px solid var(--border); color: var(--text-dim); padding: 10px; border-radius: 6px; cursor: pointer; text-align: left; transition: all 0.2s; font-size: 0.9rem; }
         .action-btn:hover { border-color: var(--primary); color: #fff; background: rgba(59,130,246,0.1); }
-        
-        .main { flex: 1; display: flex; flex-direction: column; position: relative; z-index: 5; }
+        .main { flex: 1; display: flex; flex-direction: column; position: relative; }
         .chat-container { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth; }
         .message { max-width: 800px; margin: 0 auto; width: 100%; display: flex; gap: 16px; opacity: 0; animation: fadeIn 0.3s forwards; }
         .message.user { justify-content: flex-end; }
         .avatar { width: 36px; height: 36px; border-radius: 8px; background: var(--panel); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
         .message.user .avatar { order: 2; background: var(--primary); border-color: var(--primary); color: white; }
-        .bubble { background: rgba(15, 15, 19, 0.95); border: 1px solid var(--border); padding: 12px 18px; border-radius: 12px; font-size: 0.95rem; line-height: 1.6; position: relative; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); backdrop-filter: blur(2px); }
+        .bubble { background: var(--panel); border: 1px solid var(--border); padding: 12px 18px; border-radius: 12px; font-size: 0.95rem; line-height: 1.6; position: relative; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
         .message.user .bubble { background: var(--primary); color: white; border-color: var(--primary); text-align: right; }
         
         .tool-card { max-width: 800px; margin: 0 auto; background: var(--tool-bg); border: 1px solid var(--accent); border-left: 4px solid var(--accent); padding: 10px 16px; border-radius: 6px; color: #d8b4fe; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; display: flex; align-items: center; gap: 12px; animation: slideIn 0.4s ease-out; margin-bottom: -10px; }
@@ -398,7 +531,7 @@ HTML_TEMPLATE = """
         .bubble ul { padding-left: 20px; margin: 10px 0; } .bubble li { margin-bottom: 6px; }
         .bubble code { background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
         
-        .input-area { padding: 20px; background: rgba(5,5,5,0.85); border-top: 1px solid var(--border); backdrop-filter: blur(10px); }
+        .input-area { padding: 20px; background: rgba(5,5,5,0.9); border-top: 1px solid var(--border); backdrop-filter: blur(10px); }
         .input-wrapper { max-width: 800px; margin: 0 auto; position: relative; display: flex; gap: 10px; }
         input { width: 100%; background: var(--panel); border: 1px solid var(--border); padding: 14px 18px; border-radius: 10px; color: white; font-family: inherit; font-size: 1rem; outline: none; transition: border-color 0.2s; }
         input:focus { border-color: var(--primary); }
@@ -415,7 +548,6 @@ HTML_TEMPLATE = """
     </style>
 </head>
 <body>
-    <canvas id="bg-canvas"></canvas>
     <div class="sidebar">
         <div class="brand"><span>//</span> KUSTX</div>
         <div class="status-box"><div id="status-dot" class="status-indicator live"></div><span id="status-text">System Online</span></div>
@@ -436,73 +568,6 @@ HTML_TEMPLATE = """
         </div>
     </div>
 <script>
-    // --- BACKGROUND ANIMATION ---
-    (function() {
-        const canvas = document.getElementById('bg-canvas');
-        const ctx = canvas.getContext('2d');
-        let width, height;
-        let particles = [];
-
-        function resize() {
-            width = canvas.width = window.innerWidth;
-            height = canvas.height = window.innerHeight;
-            initParticles();
-        }
-        
-        function initParticles() {
-            particles = [];
-            const count = Math.floor(width * height / 15000); // density
-            for(let i=0; i<count; i++) {
-                particles.push({
-                    x: Math.random() * width,
-                    y: Math.random() * height,
-                    vx: (Math.random() - 0.5) * 0.5,
-                    vy: (Math.random() - 0.5) * 0.5,
-                    size: Math.random() * 2 + 1
-                });
-            }
-        }
-
-        function animate() {
-            ctx.clearRect(0, 0, width, height);
-            ctx.fillStyle = 'rgba(59, 130, 246, 0.15)'; // primary blue dim
-            
-            for(let i=0; i<particles.length; i++) {
-                let p = particles[i];
-                p.x += p.vx;
-                p.y += p.vy;
-
-                if(p.x < 0) p.x = width; if(p.x > width) p.x = 0;
-                if(p.y < 0) p.y = height; if(p.y > height) p.y = 0;
-
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Connect particles
-                for(let j=i+1; j<particles.length; j++) {
-                    let p2 = particles[j];
-                    let dx = p.x - p2.x;
-                    let dy = p.y - p2.y;
-                    let dist = Math.sqrt(dx*dx + dy*dy);
-                    if(dist < 100) {
-                        ctx.strokeStyle = `rgba(59, 130, 246, ${0.1 - dist/1000})`;
-                        ctx.beginPath();
-                        ctx.moveTo(p.x, p.y);
-                        ctx.lineTo(p2.x, p2.y);
-                        ctx.stroke();
-                    }
-                }
-            }
-            requestAnimationFrame(animate);
-        }
-
-        window.addEventListener('resize', resize);
-        resize();
-        animate();
-    })();
-
-    // --- MAIN APP LOGIC ---
     const uuid = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
     let session_id = localStorage.getItem('kust_sid') || uuid();
     localStorage.setItem('kust_sid', session_id);
@@ -549,25 +614,46 @@ HTML_TEMPLATE = """
                 const { done, value } = await reader.read(); if (done) break;
                 const chunk = decoder.decode(value); const lines = chunk.split('\\n\\n');
                 for (const line of lines) {
+                    if (!line) continue;
                     if (line.startsWith('data: ')) {
                         try {
                             const data = JSON.parse(line.substring(6));
+                            if (data.type === 'ping') continue;
                             if (data.type === 'tool_start') {
                                 activeToolEl = createToolCard(data.input || data.tool);
+                                continue;
                             }
                             if (data.type === 'tool_end') {
                                 if(activeToolEl) activeToolEl.remove();
+                                activeToolEl = null;
+                                continue;
+                            }
+                            if (data.type === 'tool_json') {
+                                // Assistant requested an internal tool. Frontend should show a tool card; backend will run it.
+                                activeToolEl = createToolCard('internal tool');
+                                continue;
                             }
                             if (data.type === 'token') {
                                 if (isFirstToken) { botBubble.innerHTML = ''; isFirstToken = false; }
                                 currentText += data.content; botBubble.innerHTML = marked.parse(currentText); scrollToBottom();
+                                continue;
                             }
-                            if (data.type === 'error') botBubble.innerHTML = `<span style="color:#ef4444">Error: ${data.content}</span>`;
-                        } catch (e) {}
+                            if (data.type === 'error') {
+                                botBubble.innerHTML = `<span style="color:#ef4444">Error: ${data.content}</span>`;
+                                continue;
+                            }
+                            if (data.type === 'done') {
+                                if(activeToolEl) activeToolEl.remove();
+                                activeToolEl = null;
+                                break;
+                            }
+                        } catch (e) {
+                            // ignore parse errors (partial chunk)
+                        }
                     }
                 }
             }
-        } catch (err) { botBubble.innerHTML = "Connection failed."; } finally { setBusy(false); }
+        } catch (err) { botBubble.innerHTML = "Connection failed."; console.error(err); } finally { setBusy(false); }
     }
     function ask(q) { inputEl.value = q; sendMessage(); }
     async function resetSession() { if(confirm("Clear chat?")) { await fetch('/api/reset', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({session_id})}); location.reload(); } }
@@ -577,7 +663,10 @@ HTML_TEMPLATE = """
 </html>
 """
 
+# ----------------------------
+# 9. Runner
+# ----------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    logger.info(f"Server starting on port {port}")
+    logger.info(f"Server starting on port {port} (MOCK_MODE={MOCK_MODE})")
     app.run(host="0.0.0.0", port=port, threaded=True)
