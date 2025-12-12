@@ -1,7 +1,7 @@
 # main.py
-# KUST BOTS OFFICIAL SUPPORT SYSTEM (Production Release - V2 KustX)
+# KUST BOTS OFFICIAL SUPPORT SYSTEM (Production Release - V3 KustX)
 # Single-File Flask Application with Server-Sent Events (SSE) Streaming
-# Features: Backend Buffering (Hides JSON), Real-time Typing, Context Compression, Strict Guardrails.
+# Features: Robust JSON Buffering, Real-time Typing, Context Compression, Strict Guardrails.
 
 import os
 import re
@@ -109,11 +109,11 @@ You are KustX, the official AI support for Kust Bots.
 - Official Channel: @kustbots
 
 **BEHAVIOR RULES:**
-1. **Concise:** Answers must be very short. Bullet points preferred. No fluff.
-2. **First Contact:** If the user says "hi" or "hello", reply ONLY: "Hi, I'm KustX. How can I help?"
+1. **Concise:** Answers must be short. Bullet points preferred. No fluff.
+2. **First Contact:** If the user says "hi" or "hello", reply : "Hi, I'm KustX. How can I help?"
 3. **Guardrails:** If asked to generate code, write essays, solve math, or discuss general topics/competitors, reply EXACTLY: "I cannot do that. I only support Kust Bots."
 4. **Tool Use:** If you need specific data (prices, commands), output ONLY a JSON object. Example: {"tool": "get_info", "query": "pricing"}
-5. **No Sales Pressure:** State prices clearly. Do not ask "Would you like to buy?".
+5. **PRIME DIRECTIVE:** Do NOT output any introductory text (like "Sure", "Let me check") before a JSON tool call. Output ONLY the raw JSON object.
 
 **DATA:**
 - Use the `get_info` tool for looking up project details.
@@ -159,13 +159,13 @@ def search_kb(query):
 def call_inference_stream(messages):
     """
     Generator that streams chunks.
-    CRITICAL: Buffers content if it looks like JSON to hide it from the user.
+    CRITICAL: Buffers content until it determines if it's JSON or Text to prevent leaks.
     """
     payload = {
         "model": INFERENCE_MODEL_ID,
         "messages": messages,
         "stream": True,
-        "temperature": 0.3  # Low temp for strict/concise answers
+        "temperature": 0.4 # Slightly higher for better flow, prompt restricts chatter
     }
     
     logger.info("Calling Inference API...")
@@ -177,10 +177,11 @@ def call_inference_stream(messages):
                 yield f"data: {json.dumps({'type': 'error', 'content': f'API Error {r.status_code}'})}\n\n"
                 return
 
-            # --- BUFFERING LOGIC ---
+            # --- ROBUST BUFFERING LOGIC ---
             tool_buffer = ""
             is_collecting_tool = False
-            has_started = False
+            tool_check_buffer = "" # Buffer to hold initial chars to check for '{'
+            check_completed = False
 
             for line in r.iter_lines():
                 if not line: continue
@@ -194,29 +195,44 @@ def call_inference_stream(messages):
                     try:
                         chunk_json = json.loads(data_str)
                         delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
-                        # Handle alternate format
                         if not delta and 'content' in chunk_json: delta = chunk_json['content']
 
                         if delta:
-                            # Heuristic: If the VERY FIRST content starts with '{', assume it's a tool call and buffer it.
-                            if not has_started:
-                                if delta.strip().startswith("{"):
-                                    is_collecting_tool = True
-                                has_started = True
+                            # 1. Decision Phase: Check first non-whitespace character
+                            if not check_completed:
+                                tool_check_buffer += delta
+                                stripped = tool_check_buffer.lstrip()
+                                
+                                # If we have visible characters, check if it's JSON
+                                if stripped:
+                                    if stripped.startswith("{"):
+                                        is_collecting_tool = True
+                                        tool_buffer = tool_check_buffer # Start filling tool buffer
+                                    else:
+                                        # It's normal text, flush what we held back
+                                        is_collecting_tool = False
+                                        yield f"data: {json.dumps({'type': 'token', 'content': tool_check_buffer})}\n\n"
+                                    check_completed = True
+                                
+                                # Safety: If whitespace buffer gets too long, assume text
+                                elif len(tool_check_buffer) > 50:
+                                    is_collecting_tool = False
+                                    yield f"data: {json.dumps({'type': 'token', 'content': tool_check_buffer})}\n\n"
+                                    check_completed = True
                             
-                            if is_collecting_tool:
-                                tool_buffer += delta
+                            # 2. Collection Phase
                             else:
-                                # Normal text stream - send immediately to user
-                                yield f"data: {json.dumps({'type': 'token', 'content': delta})}\n\n"
+                                if is_collecting_tool:
+                                    tool_buffer += delta
+                                else:
+                                    yield f"data: {json.dumps({'type': 'token', 'content': delta})}\n\n"
                                 
                     except Exception as e:
                         pass # Ignore parse errors on partial chunks
 
-            # Stream ended. Check if we have a buffered tool call.
+            # Stream ended. Process buffered tool call if any.
             if is_collecting_tool:
                 logger.info(f"Buffered Tool Call: {tool_buffer}")
-                # Try to parse as JSON
                 try:
                     tool_data = json.loads(tool_buffer)
                     tool_name = tool_data.get("tool")
@@ -226,7 +242,7 @@ def call_inference_stream(messages):
                     yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'input': query})}\n\n"
                     
                     # 2. Execute Tool
-                    time.sleep(0.6) # Slight delay for visual effect
+                    time.sleep(0.6) # Animation delay
                     if tool_name == "get_info":
                         tool_result = search_kb(query)
                     else:
@@ -235,17 +251,15 @@ def call_inference_stream(messages):
                     logger.info(f"Tool Result: {tool_result[:50]}...")
 
                     # 3. Recursion: Call LLM again with tool result
-                    # We inject the tool output as a User message to prompt the final answer
                     new_messages = messages + [
                         {"role": "assistant", "content": tool_buffer},
                         {"role": "user", "content": f"TOOL RESULT: {tool_result}"}
                     ]
                     
-                    # Stream the final answer (recursive)
                     yield from call_inference_stream(new_messages)
                     
                 except json.JSONDecodeError:
-                    # Failed to parse buffer as JSON? Just stream it as text (fallback)
+                    # Failed to parse? Flush as text fallback.
                     logger.warning("Failed to parse tool buffer as JSON. Streaming as text.")
                     yield f"data: {json.dumps({'type': 'token', 'content': tool_buffer})}\n\n"
 
@@ -278,8 +292,6 @@ def chat_stream():
     history.append({"role": "user", "content": user_msg})
 
     # --- COMPRESSION LOGIC ---
-    # Keep System Prompt [0] + Last 6 messages. 
-    # Prevents token overflow and keeps context relevant.
     if len(history) > 7:
         history = [history[0]] + history[-6:]
         logger.info(f"Session {sid[:8]} history compressed.")
@@ -298,7 +310,7 @@ def chat_stream():
                 except: pass
             yield event
         
-        # Save final response to history (if it wasn't a hidden tool call)
+        # Save final response to history
         if full_text_accumulator and not full_text_accumulator.strip().startswith("{"):
             history.append({"role": "assistant", "content": full_text_accumulator})
             
@@ -309,7 +321,7 @@ def chat_stream():
         mimetype='text/event-stream',
         headers={
             'Cache-Control': 'no-cache',
-            'X-Accel-Buffering': 'no', # Critical for Nginx/Heroku
+            'X-Accel-Buffering': 'no',
             'Connection': 'keep-alive'
         }
     )
