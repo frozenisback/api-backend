@@ -70,12 +70,16 @@ def run_test():
     def stream():
         yield sse("🔥 Starting token limit detection...")
 
-        test_steps = [100, 300, 500, 800]
+        # Start with base test sizes
+        test_sizes = [100, 300, 500, 800]
+
         last_success = 0
         last_fail = None
 
-        # COARSE TEST
-        for size in test_steps:
+        # ---------------------------
+        # PHASE 1 — COARSE TEST
+        # ---------------------------
+        for size in test_sizes:
             yield sse(f"⏳ Testing {size} tokens...")
             ok = test_prompt(size)
 
@@ -86,17 +90,38 @@ def run_test():
                 yield sse(f"❌ FAILED at {size}")
                 last_fail = size
                 break
-
             time.sleep(0.1)
 
+        # If no failure yet → start EXPANSION LOOP
         if last_fail is None:
-            yield sse("⚠ No failure up to 800. Increase test range manually.")
-            return
+            current = test_sizes[-1]
 
-        # BINARY SEARCH
+            yield sse("🔁 No failure so far → expanding test size...")
+
+            while True:
+                current *= 2  # Double the test size each round
+                yield sse(f"⏳ Testing {current} tokens...")
+
+                ok = test_prompt(current)
+
+                if ok:
+                    yield sse(f"✔ PASSED at {current}")
+                    last_success = current
+                else:
+                    yield sse(f"❌ FAILED at {current}")
+                    last_fail = current
+                    break
+
+                time.sleep(0.1)
+
+        # ---------------------------
+        # PHASE 2 — BINARY SEARCH
+        # ---------------------------
+
+        yield sse(f"🔍 Narrowing final range {last_success} → {last_fail}...")
+
         low = last_success
         high = last_fail
-        yield sse(f"🔍 Narrowing range from {low} → {high}...")
 
         while high - low > 5:
             mid = (low + high) // 2
@@ -116,6 +141,7 @@ def run_test():
         yield sse(f"🎉 FINAL MAX INPUT TOKEN LIMIT: {low}")
 
     return Response(stream(), mimetype="text/event-stream")
+
 
 
 # -------------------------------
