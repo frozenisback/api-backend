@@ -1,7 +1,7 @@
 # main.py
-# KUST BOTS OFFICIAL SUPPORT SYSTEM (Production Release - Fixed Streaming)
+# KUST BOTS OFFICIAL SUPPORT SYSTEM (Production Release - V2 KustX)
 # Single-File Flask Application with Server-Sent Events (SSE) Streaming
-# Features: Real-time Typing, Tool Execution Visuals, Premium UI, Auto-Healing Sessions.
+# Features: Backend Buffering (Hides JSON), Real-time Typing, Context Compression, Strict Guardrails.
 
 import os
 import re
@@ -41,103 +41,68 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-logger.info(f"System Initialized. Target API: {API_URL}")
-logger.info(f"Target Model: {INFERENCE_MODEL_ID}")
+logger.info(f"System Initialized. Model: {INFERENCE_MODEL_ID}")
 
 # ----------------------------
 # 2. Knowledge Base (Business Logic)
 # ----------------------------
-# Extracted from "SYSTEM ROLE and info about my business.txt"
 KB = {
     "projects": {
         "stake_chat_farmer": {
             "name": "Stake Chat Farmer",
-            "summary": "Autonomous human-like chat generator for farming XP/Levels.",
-            "features": [
-                "Per-user memory & mood adaptation",
-                "Anti-spam human-flow simulation",
-                "Works on all Stake country servers",
-                "24/7 operation with Multi-account support"
-            ],
-            "access": "Bot: @kustchatbot",
-            "pricing": "Free 3-hour trial available.",
-            "notes": "Not a spam bot. Simulates real human conversation patterns."
+            "access": "@kustchatbot",
+            "price": "Free 3-hour trial",
+            "features": "Autonomous chat generator. Not spam. Farms XP/Levels. 24/7. Multi-account.",
+            "setup": "Start bot -> Link account -> Set mood -> Start farming."
         },
         "stake_code_claimer": {
             "name": "Stake Code Claimer",
-            "summary": "Automated system to monitor channels and claim codes instantly.",
-            "features": [
-                "Monitors Stake TG channels",
-                "Detects codes instantly",
-                "Auto-redeems across accounts",
-                "24/7 execution"
-            ],
-            "notes": "Maximize code capture speed & conversion."
+            "info": "Monitors channels, claims codes instantly across accounts. 24/7 execution."
         },
         "frozen_music": {
             "name": "Frozen Music Bot",
-            "summary": "Main VC Music Bot (High Performance).",
-            "commands": {
-                "/play": "Play audio (YouTube/Spotify/Resso/Apple/SC)",
-                "/vplay": "Play video + audio",
-                "/skip": "Skip track",
-                "/couple": "Picks random pair daily",
-                "/tmute": "Temp mute user (Admin)"
-            },
-            "notes": "Distributed backend, caching, multi-node infra."
+            "commands": ["/play", "/vplay", "/skip", "/couple", "/tmute"],
+            "info": "High-performance VC music bot. Distributed backend for stability."
         },
         "kustify_hosting": {
             "name": "Kustify Hosting",
-            "summary": "Bot Hosting Service via @kustifybot.",
+            "bot": "@kustifybot",
             "plans": {
-                "Ember": "$1.44/mo (0.25 CPU, 512MB RAM)",
-                "Flare": "$2.16/mo (0.5 CPU, 1GB RAM)",
-                "Inferno": "$3.60/mo (1 CPU, 2GB RAM)"
+                "Ember": "$1.44/mo (0.25 CPU/512MB)",
+                "Flare": "$2.16/mo (0.5 CPU/1GB)",
+                "Inferno": "$3.60/mo (1 CPU/2GB)"
             },
-            "notes": "Stopped bots cost 2 sparks/day for standby. Deploy via /host."
+            "info": "Deploy via /host. Stopped bots cost 2 sparks/day."
         },
         "custom_bots": {
             "name": "Paid Custom Bots",
-            "summary": "White-label solutions for communities.",
-            "pricing": {
-                "Commands": "$2–$5 each",
-                "Music Tier 1": "$4/mo + $6 setup (4-5 VCs)",
-                "Music Tier 2": "$8/mo + $10 setup (~15 VCs)",
-                "Music Tier 3": "$20/mo + $25 setup (~50 VCs)"
-            }
+            "pricing": "Commands: $2-$5. Music Bots: $4/mo (Tier 1) to $20/mo (Tier 3).",
+            "info": "White-label solutions."
         }
     },
     "compliance": {
-        "official_channels": ["@kustbots", "@kustbotschat", "@KustDev"],
-        "rules": [
-            "Never mention bonuses, drops, or gambling promotions.",
-            "Never start convo with mods.",
-            "Never push sales aggressively.",
-            "Only official channels are safe."
-        ]
+        "official": ["@kustbots", "@kustbotschat", "@KustDev"],
+        "warn": "Beware of fakes. We NEVER discuss gambling bonuses, drops, or predictions."
     }
 }
 
-SYSTEM_PROMPT = f"""
-You are the OFFICIAL Support Agent for Kust Bots.
-Your Owner: @KustDev. Official Channel: @kustbots.
+SYSTEM_PROMPT = """
+You are KustX, the official AI support for Kust Bots.
 
-**CORE RULES:**
-1. Direct & Engineering-First: Be concise, professional, no fluff.
-2. Safety: WARN users if they mention unofficial channels. ONLY @kustbots is real.
-3. Compliance: NEVER discuss gambling bonuses, drops, or predictions.
-4. Sales: Explain pricing clearly (Ember $1.44, Flare $2.16, Inferno $3.60) but do not "push" sales.
+**IDENTITY:**
+- Name: KustX
+- Owner: @KustDev
+- Official Channel: @kustbots
 
-**TOOL USAGE:**
-You have access to a live database. If a user asks for specific prices, commands, or project details, you MUST use the `get_info` tool.
-To use a tool, your response must be ONLY a JSON object:
-{{"tool": "get_info", "query": "kustify pricing"}}
+**BEHAVIOR RULES:**
+1. **Concise:** Answers must be very short. Bullet points preferred. No fluff.
+2. **First Contact:** If the user says "hi" or "hello", reply ONLY: "Hi, I'm KustX. How can I help?"
+3. **Guardrails:** If asked to generate code, write essays, solve math, or discuss general topics/competitors, reply EXACTLY: "I cannot do that. I only support Kust Bots."
+4. **Tool Use:** If you need specific data (prices, commands), output ONLY a JSON object. Example: {"tool": "get_info", "query": "pricing"}
+5. **No Sales Pressure:** State prices clearly. Do not ask "Would you like to buy?".
 
-**RESPONSE STYLE:**
-- Use Markdown.
-- If listing steps, use numbers.
-- If listing commands, use code blocks `like this`.
-- Be helpful but concise.
+**DATA:**
+- Use the `get_info` tool for looking up project details.
 """
 
 # ----------------------------
@@ -145,7 +110,6 @@ To use a tool, your response must be ONLY a JSON object:
 # ----------------------------
 app = Flask(__name__)
 # In-memory storage for active chat sessions
-# Structure: { session_id: [ {role, content}, ... ] }
 SESSIONS = {}
 
 def get_session(sid):
@@ -157,7 +121,6 @@ def get_session(sid):
 # 4. Tool Implementations
 # ----------------------------
 def search_kb(query):
-    """Fuzzy searches the KB for relevant info."""
     query = query.lower()
     results = []
     
@@ -165,127 +128,116 @@ def search_kb(query):
     for key, data in KB["projects"].items():
         blob = str(data).lower()
         if query in key or query in data['name'].lower() or any(w in blob for w in query.split()):
-            results.append(f"Project: {data['name']}\nData: {json.dumps(data, indent=2)}")
+            # Return compact JSON for the LLM to read
+            results.append(f"{data['name']}: {json.dumps(data)}")
     
-    # Check Compliance/General
-    if "official" in query or "fake" in query or "channel" in query:
-        results.append(f"Official Channels: {KB['compliance']['official_channels']}")
+    # Check Compliance
+    if "official" in query or "fake" in query or "real" in query:
+        results.append(str(KB['compliance']))
     
     if not results:
-        return "No specific database record found. Answer based on general knowledge."
-    return "\n\n".join(results[:3]) # Return top 3 matches
+        return "No specific record found. Answer concisely based on general Kust knowledge."
+    return "\n".join(results[:2])
 
 # ----------------------------
-# 5. Core AI Logic (Streaming)
+# 5. Core AI Logic (Buffered Streaming)
 # ----------------------------
 def call_inference_stream(messages):
     """
-    Generator that streams chunks from the LLM.
-    If the LLM returns a Tool Call (JSON), we handle it and yield events.
+    Generator that streams chunks.
+    CRITICAL: Buffers content if it looks like JSON to hide it from the user.
     """
     payload = {
         "model": INFERENCE_MODEL_ID,
         "messages": messages,
-        "stream": True,  # Enable streaming from upstream
-        "temperature": 0.5
+        "stream": True,
+        "temperature": 0.3  # Low temp for strict/concise answers
     }
     
-    logger.info(f"Initiating Inference Call to {API_URL}")
+    logger.info("Calling Inference API...")
     
     try:
-        # 1. Start Request
         with requests.post(API_URL, json=payload, headers=HEADERS, stream=True, timeout=60) as r:
-            logger.info(f"Inference API Response: {r.status_code}")
-            
             if r.status_code != 200:
-                error_msg = r.text
-                logger.error(f"Upstream API Error: {r.status_code} - {error_msg}")
-                yield f"data: {json.dumps({'type': 'error', 'content': f'API Error {r.status_code}: {error_msg}'})}\n\n"
+                logger.error(f"API Error: {r.status_code} - {r.text}")
+                yield f"data: {json.dumps({'type': 'error', 'content': f'API Error {r.status_code}'})}\n\n"
                 return
 
-            full_content = ""
-            chunk_count = 0
-            
-            # 2. Process Stream
+            # --- BUFFERING LOGIC ---
+            tool_buffer = ""
+            is_collecting_tool = False
+            has_started = False
+
             for line in r.iter_lines():
                 if not line: continue
                 line = line.decode('utf-8')
                 
-                # Flexible parsing: handle 'data: ' and 'data:'
+                # Handle 'data:' with or without space
                 if line.startswith('data:'):
-                    # Remove the 'data:' prefix and strip whitespace
                     data_str = line[5:].strip()
-                    
-                    if data_str == '[DONE]':
-                        logger.info("Stream received [DONE] signal.")
-                        break
+                    if data_str == '[DONE]': break
                     
                     try:
                         chunk_json = json.loads(data_str)
-                        
-                        # Handle standard OpenAI format
                         delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
-                        
-                        # Handle potential alternative format (some providers differ)
-                        if not delta and 'content' in chunk_json:
-                            delta = chunk_json['content']
+                        # Handle alternate format
+                        if not delta and 'content' in chunk_json: delta = chunk_json['content']
 
                         if delta:
-                            chunk_count += 1
-                            full_content += delta
-                            # Yield token to frontend
-                            yield f"data: {json.dumps({'type': 'token', 'content': delta})}\n\n"
+                            # Heuristic: If the VERY FIRST content starts with '{', assume it's a tool call and buffer it.
+                            if not has_started:
+                                if delta.strip().startswith("{"):
+                                    is_collecting_tool = True
+                                has_started = True
+                            
+                            if is_collecting_tool:
+                                tool_buffer += delta
+                            else:
+                                # Normal text stream - send immediately to user
+                                yield f"data: {json.dumps({'type': 'token', 'content': delta})}\n\n"
+                                
                     except Exception as e:
-                        # Only log errors for lines that look like JSON but fail
-                        if data_str.startswith('{'):
-                             logger.warning(f"Failed to parse chunk: {data_str[:50]}... | Error: {e}")
-            
-            if chunk_count == 0:
-                logger.warning("Stream finished but NO tokens were parsed. Check API response format.")
-            
-            # 3. Check for Tool Use in the accumulated content
-            stripped = full_content.strip()
-            # Heuristic: If content looks like a JSON tool call
-            if stripped.startswith('{') and '"tool"' in stripped and stripped.endswith('}'):
+                        pass # Ignore parse errors on partial chunks
+
+            # Stream ended. Check if we have a buffered tool call.
+            if is_collecting_tool:
+                logger.info(f"Buffered Tool Call: {tool_buffer}")
+                # Try to parse as JSON
                 try:
-                    tool_data = json.loads(stripped)
+                    tool_data = json.loads(tool_buffer)
                     tool_name = tool_data.get("tool")
                     query = tool_data.get("query")
                     
-                    logger.info(f"Tool Triggered: {tool_name} with query: {query}")
-                    
-                    # Notify Frontend: Tool Started
+                    # 1. Notify Frontend: Tool Started (Shows Animation)
                     yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'input': query})}\n\n"
                     
-                    # Execute Tool
-                    time.sleep(0.8) # Artificial delay for "Animation" feel
+                    # 2. Execute Tool
+                    time.sleep(0.6) # Slight delay for visual effect
                     if tool_name == "get_info":
                         tool_result = search_kb(query)
                     else:
                         tool_result = "Tool not found."
                     
                     logger.info(f"Tool Result: {tool_result[:50]}...")
-                    
-                    # Notify Frontend: Tool Done
-                    yield f"data: {json.dumps({'type': 'tool_end', 'result': 'Data retrieved.'})}\n\n"
-                    
-                    # 4. Recursion: Call LLM again with tool result
+
+                    # 3. Recursion: Call LLM again with tool result
+                    # We inject the tool output as a User message to prompt the final answer
                     new_messages = messages + [
-                        {"role": "assistant", "content": stripped},
+                        {"role": "assistant", "content": tool_buffer},
                         {"role": "user", "content": f"TOOL RESULT: {tool_result}"}
                     ]
                     
-                    # Stream the final answer (recursive yield from new generator)
+                    # Stream the final answer (recursive)
                     yield from call_inference_stream(new_messages)
                     
                 except json.JSONDecodeError:
-                    # Not valid JSON, just treat as text
-                    logger.info("Response looked like JSON but failed decode, treating as text.")
-                    pass
+                    # Failed to parse buffer as JSON? Just stream it as text (fallback)
+                    logger.warning("Failed to parse tool buffer as JSON. Streaming as text.")
+                    yield f"data: {json.dumps({'type': 'token', 'content': tool_buffer})}\n\n"
 
     except Exception as e:
         logger.exception(f"Stream Exception: {e}")
-        yield f"data: {json.dumps({'type': 'error', 'content': 'Internal Connection Error.'})}\n\n"
+        yield f"data: {json.dumps({'type': 'error', 'content': 'Connection interrupted.'})}\n\n"
 
 # ----------------------------
 # 6. Routes
@@ -302,36 +254,40 @@ def chat_stream():
     user_msg = data.get("message")
     sid = data.get("session_id", str(uuid.uuid4()))
     
-    logger.info(f"Session {sid[:8]} - User Msg: {user_msg}")
-    
     if not user_msg:
         return jsonify({"error": "No message"}), 400
 
-    # Update History
+    logger.info(f"Session {sid[:8]} User: {user_msg}")
+
+    # Get History
     history = get_session(sid)
     history.append({"role": "user", "content": user_msg})
 
+    # --- COMPRESSION LOGIC ---
+    # Keep System Prompt [0] + Last 6 messages. 
+    # Prevents token overflow and keeps context relevant.
+    if len(history) > 7:
+        history = [history[0]] + history[-6:]
+        logger.info(f"Session {sid[:8]} history compressed.")
+
     def generate():
-        # Yield a ping to confirm connection immediately
         yield f"data: {json.dumps({'type': 'ping'})}\n\n"
         
-        full_response_accumulator = ""
+        full_text_accumulator = ""
         
-        # Stream response
         for event in call_inference_stream(history):
-            # Capture content to save to history later
             if event.startswith("data: "):
                 try:
-                    evt_data = json.loads(event[6:])
-                    if evt_data['type'] == 'token':
-                        full_response_accumulator += evt_data['content']
+                    d = json.loads(event[6:])
+                    if d['type'] == 'token':
+                        full_text_accumulator += d['content']
                 except: pass
             yield event
-            
-        # Save Assistant Response to Memory
-        if full_response_accumulator and not full_response_accumulator.strip().startswith("{"):
-            history.append({"role": "assistant", "content": full_response_accumulator})
         
+        # Save final response to history (if it wasn't a hidden tool call)
+        if full_text_accumulator and not full_text_accumulator.strip().startswith("{"):
+            history.append({"role": "assistant", "content": full_text_accumulator})
+            
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     return Response(
@@ -339,7 +295,7 @@ def chat_stream():
         mimetype='text/event-stream',
         headers={
             'Cache-Control': 'no-cache',
-            'X-Accel-Buffering': 'no',
+            'X-Accel-Buffering': 'no', # Critical for Nginx/Heroku
             'Connection': 'keep-alive'
         }
     )
@@ -361,7 +317,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KUST BOTS | Support Terminal</title>
+    <title>KUSTX | Support Terminal</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
@@ -394,12 +350,11 @@ HTML_TEMPLATE = """
             background: var(--panel);
             border-right: 1px solid var(--border);
             padding: 24px;
-            display: flex;
+            display: flex; /* Flex on desktop */
             flex-direction: column;
             gap: 20px;
-            display: none; /* Hidden on mobile by default */
         }
-        @media(min-width: 768px) { .sidebar { display: flex; } }
+        @media(max-width: 768px) { .sidebar { display: none; } }
 
         .brand { 
             font-family: 'JetBrains Mono', monospace; 
@@ -585,7 +540,7 @@ HTML_TEMPLATE = """
     <!-- Sidebar -->
     <div class="sidebar">
         <div class="brand">
-            <span>//</span> KUST BOTS
+            <span>//</span> KUSTX
         </div>
         <div class="status-box">
             <div id="status-dot" class="status-indicator live"></div>
@@ -613,8 +568,8 @@ HTML_TEMPLATE = """
             <div class="message">
                 <div class="avatar">🤖</div>
                 <div class="bubble">
-                    <p><strong>Connected to Kust Support Core.</strong></p>
-                    <p>I can help with Kustify, Music Bots, Stake Tools, and Billing. How can I assist you today?</p>
+                    <p><strong>KustX Online.</strong></p>
+                    <p>I am KustX. How can I help you?</p>
                 </div>
             </div>
         </div>
@@ -747,7 +702,7 @@ HTML_TEMPLATE = """
                             }
 
                         } catch (e) {
-                            console.log("Parse error", e);
+                            // ignore partial json
                         }
                     }
                 }
