@@ -28,6 +28,13 @@ INFERENCE_KEY = os.getenv("INFERENCE_KEY", "")
 INFERENCE_MODEL_ID = os.getenv("INFERENCE_MODEL_ID", "")
 BASE_URL = os.getenv("INFERENCE_URL", "")
 
+# ----------------------------
+# Telegram Bot settings (user-provided token & channel)
+# ----------------------------
+# NOTE: You provided the following — keep secure.
+TELEGRAM_BOT_TOKEN = "8127386338:AAFLgLGp3KX2NI85kxEpSytz8k1GO5DSZww"
+TELEGRAM_CHANNEL_ID = "-1002056355467"
+
 if not (INFERENCE_KEY and INFERENCE_MODEL_ID and BASE_URL):
     logger.error("⚠️ CRITICAL: Missing INFERENCE env vars.")
 
@@ -227,33 +234,108 @@ def get_session(sid):
 # 4. Tool Implementations
 # ----------------------------
 def search_kb(query):
-    query = query.lower()
-    
-    # BROAD SEARCH LOGIC (Fixing the "only 1 result" issue)
-    broad_terms = ["service", "offer", "product", "menu", "list", "available", "what do you do"]
-    if any(term in query for term in broad_terms):
-        summary = ["Here is an overview of all Kust Bots services:"]
+    """
+    Improved KB search:
+    - Broad queries return summary of projects.
+    - Specific queries search by project name, keys, or about_me.
+    - Recognizes owner/about queries robustly.
+    """
+    if not query:
+        return "No query provided."
+
+    q = query.lower().strip()
+
+    # BROAD SEARCH LOGIC
+    broad_terms = ["service", "offer", "product", "menu", "list", "available", "what do you do", "services"]
+    if any(term in q for term in broad_terms):
+        summary = {"overview": []}
         for key, data in KB["projects"].items():
-            summary.append(f"**{data['name']}**: {data.get('info') or 'See details via specific query.'}")
-        return "\n\n".join(summary)
+            summary["overview"].append({"key": key, "name": data.get("name"), "info": data.get("info", None)})
+        return json.dumps(summary, ensure_ascii=False)
+
+    # OWNER / ABOUT queries
+    owner_terms = ["kust", "owner", "about me", "about kust", "who is kust", "who are you", "about owner", "about_me"]
+    if any(term in q for term in owner_terms):
+        return json.dumps(KB.get("about_me", {}), ensure_ascii=False)
 
     # SPECIFIC SEARCH LOGIC
     results = []
     for key, data in KB["projects"].items():
-        blob = str(data).lower()
-        if query in key or query in data['name'].lower() or any(w in blob for w in query.split()):
-            results.append(f"{data['name']}: {json.dumps(data)}")
-    
-    if "official" in query or "fake" in query or "real" in query:
-        results.append(str(KB['compliance']))
-    
-    # Support queries about the owner / developer details
-    if "kust" in query or "owner" in query or "about me" in query or "about kust" in query:
-        results.append(json.dumps(KB.get("about_me", "No owner data available")))
+        blob = json.dumps(data).lower()
+        if q in key or q in data.get('name', '').lower() or any(w in blob for w in q.split()):
+            # return a compact JSON-friendly dict
+            results.append({"key": key, "data": data})
+
+    if "official" in q or "fake" in q or "real" in q:
+        results.append({"compliance": KB['compliance']})
 
     if not results:
         return "No specific record found. Answer based on general Kust knowledge."
-    return "\n".join(results[:3])
+    return json.dumps(results[:5], ensure_ascii=False)
+
+def fetch_telegram_history(limit=None):
+    """
+    Best-effort: fetch available updates via getUpdates and filter messages from TELEGRAM_CHANNEL_ID.
+    - Telegram does not provide arbitrary chat-history retrieval via bot API.
+    - This function collects all updates the bot currently has in its update queue (repeatedly),
+      aggregates them and filters for messages matching TELEGRAM_CHANNEL_ID.
+    - limit: optional max number of messages to return (after filtering).
+    """
+    token = TELEGRAM_BOT_TOKEN
+    channel_id = str(TELEGRAM_CHANNEL_ID)
+    base = f"https://api.telegram.org/bot{token}"
+    all_updates = []
+    offset = 0
+    try:
+        while True:
+            params = {"offset": offset or None, "limit": 100, "timeout": 0}
+            r = requests.get(f"{base}/getUpdates", params=params, timeout=20)
+            if r.status_code != 200:
+                return f"HTTP error {r.status_code} from Telegram."
+
+            data = r.json()
+            if not data.get("ok"):
+                return f"Telegram API returned error: {data}"
+
+            updates = data.get("result", [])
+            if not updates:
+                break
+
+            all_updates.extend(updates)
+            offset = updates[-1]["update_id"] + 1
+
+            # safety caps
+            if len(all_updates) > 5000:
+                # avoid infinite loops / huge memory usage
+                break
+
+        # Filter messages relevant to the channel id
+        msgs = []
+        for u in all_updates:
+            # channel posts can appear as 'channel_post' or 'message'
+            msg = u.get("message") or u.get("channel_post") or u.get("edited_message")
+            if not msg:
+                continue
+            chat = msg.get("chat", {})
+            if str(chat.get("id")) == channel_id:
+                # normalize a simple structure
+                msgs.append({
+                    "update_id": u.get("update_id"),
+                    "message_id": msg.get("message_id"),
+                    "date": msg.get("date"),
+                    "from": msg.get("from"),
+                    "text": msg.get("text") or msg.get("caption") or "",
+                    "raw": msg
+                })
+            # also try matching by chat.username if needed (not typical for channels)
+        # apply limit if requested
+        if limit:
+            msgs = msgs[:limit]
+        # Return structured JSON string
+        return json.dumps({"channel_id": channel_id, "found_messages": len(msgs), "messages": msgs}, ensure_ascii=False)
+    except Exception as e:
+        logger.exception("Telegram fetch error")
+        return f"Exception while fetching Telegram updates: {str(e)}"
 
 # ----------------------------
 # 5. Core AI Logic (Buffered Streaming with improved tool detection)
@@ -366,8 +448,12 @@ def call_inference_stream(messages):
                         # 2. Execute tool (simulate small delay to show spinner)
                         # Keep animation visible for a short moment after tool finishes
                         try:
-                            if tool_name == "get_info":
+                            tool_name_lower = (tool_name or "").lower() if tool_name else ""
+                            if tool_name_lower == "get_info" or tool_name_lower == "getinfo":
                                 tool_result = search_kb(query)
+                            elif tool_name_lower in ("get_telegram_history", "get_telegram_updates", "tg_history", "telegram_history"):
+                                # fetch from Telegram using raw HTTP Bot API (best-effort)
+                                tool_result = fetch_telegram_history(limit=None)
                             else:
                                 tool_result = "Tool not found."
                         except Exception as e:
