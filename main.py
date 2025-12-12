@@ -60,13 +60,24 @@ KB = {
             ],
             "setup": [
                 "Start bot @kustchatbot",
-                "Link account",
-                "Configure mood/tone",
-                "Start farming mode"
+                "If you're new, click the 'Get your trial now' button",
+                "Enter your Stake username (case-sensitive)",
+                "The bot will provide an unpacked extension file",
+                "Unzip the file and load it in Chrome with Developer Tools enabled",
+                "Navigate to stake.com or any Stake mirror (https://stake.com/casino/games/mines)",
+                "Go to Chrome extensions, click on our extension and enable it",
+                "Refresh the page to see the Chat Farmer popup on the left side",
+                "If already subscribed, click the 'Enable AI' button to start farming",
+                "If your trial is over: go to the bot, send /start, click 'Buy Subscription'",
+                "Enter your Stake username and choose payment method (crypto or UPI)",
+                "UPI is processed manually, crypto is processed via Oxa Pay (automated)",
+                "The bot provides a setup video in Hindi for detailed guidance"
             ],
             "support_notes": [
                 "Ask for server/country and number of accounts",
-                "Common fix: Reset memory profile or timing windows"
+                "Common fix: Reset memory profile or timing windows",
+                "Ensure Chrome extensions are properly enabled and page is refreshed",
+                "Verify Stake username is entered correctly (case-sensitive)"
             ]
         },
         "stake_code_claimer": {
