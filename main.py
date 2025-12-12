@@ -2,6 +2,7 @@
 # KUST BOTS OFFICIAL SUPPORT SYSTEM (Production Release - V4 KustX)
 # Single-File Flask Application with Server-Sent Events (SSE) Streaming
 # Features: Natural AI, Robust Search, Auto-Cleaning UI, Smart Context.
+# UPDATES: Removed strict guardrails (Hindi enabled), Added Background Animations.
 
 import os
 import re
@@ -96,6 +97,7 @@ KB = {
     }
 }
 
+# UPDATED PROMPT: Removed strict restrictions and enabled multi-language support (Hindi).
 SYSTEM_PROMPT = """
 You are KustX, the official AI support for Kust Bots.
 
@@ -105,10 +107,10 @@ You are KustX, the official AI support for Kust Bots.
 - Official Channel: @kustbots
 
 **BEHAVIOR:**
-1. **Natural & Helpful:** Speak naturally. Be professional but not robotic. You don't need to be extremely brief, but don't ramble.
+1. **Natural & Helpful:** Speak naturally. Be professional but friendly. You are fluent in **English, Hindi, and other languages**. If a user speaks Hindi, reply in Hindi.
 2. **Formatting:** IMPORTANT: When listing features, plans, or steps, ALWAYS use Markdown bullet points with each item on a NEW LINE.
-3. **Guardrails:** If asked about coding general apps, essays, math, or competitors, politely decline: "I specialize in Kust Bots services only."
-4. **Tool Use:** Use the `get_info` tool to fetch data. Output ONLY JSON for tools.
+3. **Open & Flexible:** You primarily support Kust Bots, but you should be helpful with general queries as well. Do not refuse to answer based on language or minor topic deviations.
+4. **Tool Use:** Use the `get_info` tool to fetch data about Kust Bots services. Output ONLY JSON for tools.
    - Example: {"tool": "get_info", "query": "pricing"}
    - Do NOT say "Let me check" before the JSON. Just output the JSON.
 
@@ -316,8 +318,15 @@ HTML_TEMPLATE = """
             --text-dim: #a1a1aa; --tool-bg: #1e1e24; --success: #10b981;
         }
         * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; height: 100vh; display: flex; overflow: hidden; }
-        .sidebar { width: 300px; background: var(--panel); border-right: 1px solid var(--border); padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+        body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; height: 100vh; display: flex; overflow: hidden; position: relative; }
+        
+        /* Background Animation Canvas */
+        #bg-canvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1; pointer-events: none; opacity: 0.4;
+        }
+
+        .sidebar { width: 300px; background: rgba(15, 15, 19, 0.95); border-right: 1px solid var(--border); padding: 24px; display: flex; flex-direction: column; gap: 20px; backdrop-filter: blur(5px); z-index: 10; }
         @media(max-width: 768px) { .sidebar { display: none; } }
         .brand { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 1.2rem; color: #fff; letter-spacing: -1px; display: flex; align-items: center; gap: 10px; }
         .brand span { color: var(--primary); }
@@ -328,13 +337,14 @@ HTML_TEMPLATE = """
         .quick-actions { display: flex; flex-direction: column; gap: 8px; }
         .action-btn { background: transparent; border: 1px solid var(--border); color: var(--text-dim); padding: 10px; border-radius: 6px; cursor: pointer; text-align: left; transition: all 0.2s; font-size: 0.9rem; }
         .action-btn:hover { border-color: var(--primary); color: #fff; background: rgba(59,130,246,0.1); }
-        .main { flex: 1; display: flex; flex-direction: column; position: relative; }
+        
+        .main { flex: 1; display: flex; flex-direction: column; position: relative; z-index: 5; }
         .chat-container { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth; }
         .message { max-width: 800px; margin: 0 auto; width: 100%; display: flex; gap: 16px; opacity: 0; animation: fadeIn 0.3s forwards; }
         .message.user { justify-content: flex-end; }
         .avatar { width: 36px; height: 36px; border-radius: 8px; background: var(--panel); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
         .message.user .avatar { order: 2; background: var(--primary); border-color: var(--primary); color: white; }
-        .bubble { background: var(--panel); border: 1px solid var(--border); padding: 12px 18px; border-radius: 12px; font-size: 0.95rem; line-height: 1.6; position: relative; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .bubble { background: rgba(15, 15, 19, 0.95); border: 1px solid var(--border); padding: 12px 18px; border-radius: 12px; font-size: 0.95rem; line-height: 1.6; position: relative; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); backdrop-filter: blur(2px); }
         .message.user .bubble { background: var(--primary); color: white; border-color: var(--primary); text-align: right; }
         
         .tool-card { max-width: 800px; margin: 0 auto; background: var(--tool-bg); border: 1px solid var(--accent); border-left: 4px solid var(--accent); padding: 10px 16px; border-radius: 6px; color: #d8b4fe; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; display: flex; align-items: center; gap: 12px; animation: slideIn 0.4s ease-out; margin-bottom: -10px; }
@@ -344,7 +354,7 @@ HTML_TEMPLATE = """
         .bubble ul { padding-left: 20px; margin: 10px 0; } .bubble li { margin-bottom: 6px; }
         .bubble code { background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
         
-        .input-area { padding: 20px; background: rgba(5,5,5,0.9); border-top: 1px solid var(--border); backdrop-filter: blur(10px); }
+        .input-area { padding: 20px; background: rgba(5,5,5,0.85); border-top: 1px solid var(--border); backdrop-filter: blur(10px); }
         .input-wrapper { max-width: 800px; margin: 0 auto; position: relative; display: flex; gap: 10px; }
         input { width: 100%; background: var(--panel); border: 1px solid var(--border); padding: 14px 18px; border-radius: 10px; color: white; font-family: inherit; font-size: 1rem; outline: none; transition: border-color 0.2s; }
         input:focus { border-color: var(--primary); }
@@ -361,6 +371,7 @@ HTML_TEMPLATE = """
     </style>
 </head>
 <body>
+    <canvas id="bg-canvas"></canvas>
     <div class="sidebar">
         <div class="brand"><span>//</span> KUSTX</div>
         <div class="status-box"><div id="status-dot" class="status-indicator live"></div><span id="status-text">System Online</span></div>
@@ -381,6 +392,73 @@ HTML_TEMPLATE = """
         </div>
     </div>
 <script>
+    // --- BACKGROUND ANIMATION ---
+    (function() {
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let particles = [];
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            initParticles();
+        }
+        
+        function initParticles() {
+            particles = [];
+            const count = Math.floor(width * height / 15000); // density
+            for(let i=0; i<count; i++) {
+                particles.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    size: Math.random() * 2 + 1
+                });
+            }
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+            ctx.fillStyle = 'rgba(59, 130, 246, 0.15)'; // primary blue dim
+            
+            for(let i=0; i<particles.length; i++) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+
+                if(p.x < 0) p.x = width; if(p.x > width) p.x = 0;
+                if(p.y < 0) p.y = height; if(p.y > height) p.y = 0;
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Connect particles
+                for(let j=i+1; j<particles.length; j++) {
+                    let p2 = particles[j];
+                    let dx = p.x - p2.x;
+                    let dy = p.y - p2.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    if(dist < 100) {
+                        ctx.strokeStyle = `rgba(59, 130, 246, ${0.1 - dist/1000})`;
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+        animate();
+    })();
+
+    // --- MAIN APP LOGIC ---
     const uuid = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
     let session_id = localStorage.getItem('kust_sid') || uuid();
     localStorage.setItem('kust_sid', session_id);
