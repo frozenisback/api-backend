@@ -1,38 +1,35 @@
 # main.py
-# -----------------------------------------------------------------------------
-# KUST BOTS PROFESSIONAL SUPPORT SYSTEM
-# Single-file Flask application with robust streaming, tool hiding, and polished UI.
-#
-# DEPLOYMENT:
-#   - Requires: pip install flask requests gunicorn
-#   - Env Vars: INFERENCE_URL, INFERENCE_KEY, INFERENCE_MODEL_ID
-#   - Run: gunicorn main:app --timeout 120 --workers 2 --threads 4
-# -----------------------------------------------------------------------------
+# KUST BOTS OFFICIAL SUPPORT SYSTEM (Production Release)
+# Single-File Flask Application with Server-Sent Events (SSE) Streaming
+# Features: Real-time Typing, Tool Execution Visuals, Premium UI, Auto-Healing Sessions.
 
 import os
 import re
+import time
 import json
 import uuid
-import time
 import logging
 import requests
-from flask import Flask, request, jsonify, render_template_string, stream_with_context, Response
+from flask import Flask, request, jsonify, Response, render_template_string, stream_with_context
 
-# -----------------------------------------------------------------------------
-# 1. CONFIGURATION & LOGGING
-# -----------------------------------------------------------------------------
+# ----------------------------
+# 1. Configuration & Logging
+# ----------------------------
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] [KUST-SUPPORT] %(message)s"
+    format="%(asctime)s [%(levelname)s] KUST: %(message)s",
+    datefmt="%H:%M:%S"
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("kust-support")
 
+# Load Environment Variables
 INFERENCE_KEY = os.getenv("INFERENCE_KEY", "")
 INFERENCE_MODEL_ID = os.getenv("INFERENCE_MODEL_ID", "")
 BASE_URL = os.getenv("INFERENCE_URL", "")
 
+# Validate Critical Config
 if not (INFERENCE_KEY and INFERENCE_MODEL_ID and BASE_URL):
-    logger.warning("CRITICAL: Missing Env Vars. Bot will fail to reply.")
+    logger.warning("⚠️ CRITICAL: Missing INFERENCE env vars. Bot will not reply correctly.")
 
 API_URL = f"{BASE_URL.rstrip('/')}/v1/chat/completions"
 HEADERS = {
@@ -40,701 +37,707 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-# -----------------------------------------------------------------------------
-# 2. KNOWLEDGE BASE
-# -----------------------------------------------------------------------------
+# ----------------------------
+# 2. Knowledge Base (Business Logic)
+# ----------------------------
+# Extracted from "SYSTEM ROLE and info about my business.txt"
 KB = {
-    "products": {
+    "projects": {
         "stake_chat_farmer": {
             "name": "Stake Chat Farmer",
-            "bot_link": "@kustchatbot",
-            "summary": "Autonomous chat generator. Simulates human patterns (mood, context) to farm XP/levels.",
-            "pricing": "Free 3-hour trial.",
-            "notes": "Not a spam bot; supports all country servers. Multi-account support."
+            "summary": "Autonomous human-like chat generator for farming XP/Levels.",
+            "features": [
+                "Per-user memory & mood adaptation",
+                "Anti-spam human-flow simulation",
+                "Works on all Stake country servers",
+                "24/7 operation with Multi-account support"
+            ],
+            "access": "Bot: @kustchatbot",
+            "pricing": "Free 3-hour trial available.",
+            "notes": "Not a spam bot. Simulates real human conversation patterns."
         },
         "stake_code_claimer": {
             "name": "Stake Code Claimer",
-            "summary": "Monitors channels and auto-claims codes instantly 24/7.",
-            "features": ["Instant detection", "Multi-account redeem", "24/7 uptime"]
+            "summary": "Automated system to monitor channels and claim codes instantly.",
+            "features": [
+                "Monitors Stake TG channels",
+                "Detects codes instantly",
+                "Auto-redeems across accounts",
+                "24/7 execution"
+            ],
+            "notes": "Maximize code capture speed & conversion."
         },
         "frozen_music": {
             "name": "Frozen Music Bot",
-            "summary": "High-performance distributed VC music bot.",
+            "summary": "Main VC Music Bot (High Performance).",
             "commands": {
-                "/play": "Play audio",
-                "/vplay": "Play video+audio",
-                "/playlist": "Manage list",
-                "/couple": "Daily match"
+                "/play": "Play audio (YouTube/Spotify/Resso/Apple/SC)",
+                "/vplay": "Play video + audio",
+                "/skip": "Skip track",
+                "/couple": "Picks random pair daily",
+                "/tmute": "Temp mute user (Admin)"
             },
-            "plans": {
-                "Tier 1": "$4/mo (5 VCs)",
-                "Tier 2": "$8/mo (15 VCs)",
-                "Tier 3": "$20/mo (50 VCs)"
-            }
+            "notes": "Distributed backend, caching, multi-node infra."
         },
-        "kustify": {
+        "kustify_hosting": {
             "name": "Kustify Hosting",
-            "bot_link": "@kustifybot",
-            "summary": "Bot hosting platform. Deploy via Telegram.",
+            "summary": "Bot Hosting Service via @kustifybot.",
             "plans": {
-                "Ember": "$1.44/mo (0.25 CPU/512MB)",
-                "Flare": "$2.16/mo (0.5 CPU/1GB)",
-                "Inferno": "$3.60/mo (1 CPU/2GB)"
-            }
+                "Ember": "$1.44/mo (0.25 CPU, 512MB RAM)",
+                "Flare": "$2.16/mo (0.5 CPU, 1GB RAM)",
+                "Inferno": "$3.60/mo (1 CPU, 2GB RAM)"
+            },
+            "notes": "Stopped bots cost 2 sparks/day for standby. Deploy via /host."
         },
         "custom_bots": {
-            "name": "Custom Development",
-            "summary": "Bespoke bots. Commands start at $2-$5. White-label music bots available."
+            "name": "Paid Custom Bots",
+            "summary": "White-label solutions for communities.",
+            "pricing": {
+                "Commands": "$2–$5 each",
+                "Music Tier 1": "$4/mo + $6 setup (4-5 VCs)",
+                "Music Tier 2": "$8/mo + $10 setup (~15 VCs)",
+                "Music Tier 3": "$20/mo + $25 setup (~50 VCs)"
+            }
         }
     },
     "compliance": {
-        "official": ["@kustbots", "@kustbotschat", "@KustDev"],
+        "official_channels": ["@kustbots", "@kustbotschat", "@KustDev"],
         "rules": [
-            "NO gambling promos/bonuses.",
-            "NO sales pushing.",
-            "Verify official channels.",
-            "Direct billing questions to Sparks/Payments."
+            "Never mention bonuses, drops, or gambling promotions.",
+            "Never start convo with mods.",
+            "Never push sales aggressively.",
+            "Only official channels are safe."
         ]
     }
 }
 
-# -----------------------------------------------------------------------------
-# 3. SYSTEM PROMPT
-# -----------------------------------------------------------------------------
-SYSTEM_PROMPT = """
-You are Kust Assistant, the OFFICIAL support agent for Kust Bots.
-Your style: Engineering-first, precise, professional, and helpful.
+SYSTEM_PROMPT = f"""
+You are the OFFICIAL Support Agent for Kust Bots.
+Your Owner: @KustDev. Official Channel: @kustbots.
 
 **CORE RULES:**
-1. Official Only: @kustbots, @kustbotschat, @KustDev. Warn users about fakes.
-2. No Gambling: Never discuss bonuses, drops, or gambling strategies.
-3. No Sales: Explain pricing, but do not pressure.
-4. Tools: You MUST use tools to get specific info.
+1. Direct & Engineering-First: Be concise, professional, no fluff.
+2. Safety: WARN users if they mention unofficial channels. ONLY @kustbots is real.
+3. Compliance: NEVER discuss gambling bonuses, drops, or predictions.
+4. Sales: Explain pricing clearly (Ember $1.44, Flare $2.16, Inferno $3.60) but do not "push" sales.
 
-**CRITICAL TOOL USAGE INSTRUCTION:**
-If you need to use a tool, output **ONLY** the JSON object. 
-Do **NOT** write "Let me check" or "I will search for that" before the JSON.
-Do **NOT** output markdown formatting like ```json ... ```. Just the raw JSON.
-Example: {"tool": "get_kust_info", "query": "pricing"}
+**TOOL USAGE:**
+You have access to a live database. If a user asks for specific prices, commands, or project details, you MUST use the `get_info` tool.
+To use a tool, your response must be ONLY a JSON object:
+{{"tool": "get_info", "query": "kustify pricing"}}
+
+**RESPONSE STYLE:**
+- Use Markdown.
+- If listing steps, use numbers.
+- If listing commands, use code blocks `like this`.
+- Be helpful but concise.
 """
 
-# -----------------------------------------------------------------------------
-# 4. FLASK APP & STATE
-# -----------------------------------------------------------------------------
+# ----------------------------
+# 3. Flask App & Session Management
+# ----------------------------
 app = Flask(__name__)
-CHAT_SESSIONS = {}
+# In-memory storage for active chat sessions
+# Structure: { session_id: [ {role, content}, ... ] }
+SESSIONS = {}
 
-def get_history(user_id):
-    if user_id not in CHAT_SESSIONS:
-        CHAT_SESSIONS[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
-    return CHAT_SESSIONS[user_id]
+def get_session(sid):
+    if sid not in SESSIONS:
+        SESSIONS[sid] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    return SESSIONS[sid]
 
-def update_history(user_id, role, content):
-    if not content: return
-    CHAT_SESSIONS[user_id].append({"role": role, "content": str(content)})
+# ----------------------------
+# 4. Tool Implementations
+# ----------------------------
+def search_kb(query):
+    """Fuzzy searches the KB for relevant info."""
+    query = query.lower()
+    results = []
+    
+    # Check Projects
+    for key, data in KB["projects"].items():
+        blob = str(data).lower()
+        if query in key or query in data['name'].lower() or any(w in blob for w in query.split()):
+            results.append(f"Project: {data['name']}\nData: {json.dumps(data, indent=2)}")
+    
+    # Check Compliance/General
+    if "official" in query or "fake" in query or "channel" in query:
+        results.append(f"Official Channels: {KB['compliance']['official_channels']}")
+    
+    if not results:
+        return "No specific database record found. Answer based on general knowledge."
+    return "\n\n".join(results[:3]) # Return top 3 matches
 
-# -----------------------------------------------------------------------------
-# 5. MEMORY OPTIMIZATION
-# -----------------------------------------------------------------------------
-def summarize_history_if_needed(user_id):
-    history = CHAT_SESSIONS.get(user_id, [])
-    if len(history) > 12:
-        system_msg = history[0]
-        recent_msgs = history[-3:]
-        middle_chunk = history[1:-3]
-        if not middle_chunk: return
-
-        conversation_text = ""
-        for msg in middle_chunk:
-            conversation_text += f"{msg.get('role','unknown').upper()}: {msg.get('content','')}\n"
-            
-        summary_payload = {
-            "model": INFERENCE_MODEL_ID,
-            "messages": [
-                {"role": "system", "content": "Compress this support chat into 2-3 sentences. Keep details."},
-                {"role": "user", "content": conversation_text}
-            ],
-            "max_tokens": 200,
-            "temperature": 0.3
-        }
-        try:
-            r = requests.post(API_URL, json=summary_payload, headers=HEADERS, timeout=10)
-            if r.status_code == 200:
-                summary = r.json()["choices"][0]["message"]["content"]
-                new_history = [system_msg, {"role": "system", "content": f"[SUMMARY]: {summary}"}] + recent_msgs
-                CHAT_SESSIONS[user_id] = new_history
-        except Exception:
-            CHAT_SESSIONS[user_id] = [system_msg] + recent_msgs
-
-# -----------------------------------------------------------------------------
-# 6. TOOLS
-# -----------------------------------------------------------------------------
-def tool_get_kust_info(query):
-    q = str(query).lower()
-    p = KB["products"]
-    if "farm" in q or "chat" in q: return json.dumps(p["stake_chat_farmer"])
-    if "code" in q or "claim" in q: return json.dumps(p["stake_code_claimer"])
-    if "music" in q or "play" in q or "frozen" in q: return json.dumps(p["frozen_music"])
-    if "host" in q or "kustify" in q or "plan" in q: return json.dumps(p["kustify"])
-    if "custom" in q: return json.dumps(p["custom_bots"])
-    if "rule" in q or "fake" in q or "official" in q: return json.dumps(KB["compliance"])
-    # Fallback for general queries
-    all_products = ", ".join([v["name"] for k,v in p.items()])
-    return json.dumps({"available_products": all_products, "instruction": "Ask for specific product details."})
-
-TOOLS = {"get_kust_info": tool_get_kust_info}
-
-# -----------------------------------------------------------------------------
-# 7. STREAMING LOGIC
-# -----------------------------------------------------------------------------
-def stream_inference(messages):
+# ----------------------------
+# 5. Core AI Logic (Streaming)
+# ----------------------------
+def call_inference_stream(messages):
     """
-    Yields chunks of text. 
+    Generator that streams chunks from the LLM.
+    If the LLM returns a Tool Call (JSON), we handle it and yield events.
     """
     payload = {
         "model": INFERENCE_MODEL_ID,
         "messages": messages,
-        "temperature": 0.3,
-        "max_tokens": 800,
-        "stream": True
+        "stream": True,  # Enable streaming from upstream
+        "temperature": 0.5
     }
     
-    yielded_any = False
-    
     try:
+        # 1. Start Request
         with requests.post(API_URL, json=payload, headers=HEADERS, stream=True, timeout=60) as r:
             if r.status_code != 200:
-                logger.error(f"API Error {r.status_code}: {r.text}")
-                yield f"[API Error: {r.status_code}]"
+                yield f"data: {json.dumps({'type': 'error', 'content': f'API Error {r.status_code}'})}\n\n"
                 return
 
+            full_content = ""
+            
+            # 2. Process Stream
             for line in r.iter_lines():
                 if not line: continue
-                line_text = line.decode('utf-8').strip()
-                if line_text.startswith("data:"):
-                    data_str = line_text[5:].strip()
-                    if data_str == "[DONE]": break
+                line = line.decode('utf-8')
+                if line.startswith('data: '):
+                    data_str = line[6:]
+                    if data_str.strip() == '[DONE]':
+                        break
                     try:
-                        data_json = json.loads(data_str)
-                        if "choices" in data_json and len(data_json["choices"]) > 0:
-                            content = data_json["choices"][0].get("delta", {}).get("content", "")
-                            if content:
-                                yielded_any = True
-                                yield content
-                    except json.JSONDecodeError:
-                        continue
+                        chunk_json = json.loads(data_str)
+                        # Compatible with OpenAI format
+                        delta = chunk_json['choices'][0]['delta'].get('content', '')
+                        if delta:
+                            full_content += delta
+                            # Yield token to frontend
+                            yield f"data: {json.dumps({'type': 'token', 'content': delta})}\n\n"
+                    except:
+                        pass
+            
+            # 3. Check for Tool Use in the accumulated content
+            # Heuristic: If content looks like a JSON tool call
+            stripped = full_content.strip()
+            if stripped.startswith('{') and '"tool"' in stripped and stripped.endswith('}'):
+                try:
+                    tool_data = json.loads(stripped)
+                    tool_name = tool_data.get("tool")
+                    query = tool_data.get("query")
+                    
+                    # Notify Frontend: Tool Started
+                    yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'input': query})}\n\n"
+                    
+                    # Execute Tool
+                    time.sleep(0.8) # Artificial delay for "Animation" feel
+                    if tool_name == "get_info":
+                        tool_result = search_kb(query)
+                    else:
+                        tool_result = "Tool not found."
+                    
+                    # Notify Frontend: Tool Done
+                    yield f"data: {json.dumps({'type': 'tool_end', 'result': 'Data retrieved.'})}\n\n"
+                    
+                    # 4. Recursion: Call LLM again with tool result
+                    new_messages = messages + [
+                        {"role": "assistant", "content": stripped},
+                        {"role": "user", "content": f"TOOL RESULT: {tool_result}"}
+                    ]
+                    
+                    # Stream the final answer (recursive yield from new generator)
+                    yield from call_inference_stream(new_messages)
+                    
+                except json.JSONDecodeError:
+                    # Not valid JSON, just treat as text
+                    pass
+
     except Exception as e:
-        logger.error(f"Stream Exception: {e}")
-        yield f"[Connection Error: {str(e)}]"
-        return
+        logger.error(f"Stream Error: {e}")
+        yield f"data: {json.dumps({'type': 'error', 'content': 'Connection interrupted.'})}\n\n"
 
-    if not yielded_any:
-        yield "..." 
+# ----------------------------
+# 6. Routes
+# ----------------------------
 
-def process_chat_stream(user_id, user_message):
-    history = get_history(user_id)
-    update_history(user_id, "user", user_message)
-    summarize_history_if_needed(user_id)
-    history = get_history(user_id)
-
-    # Signal initial thinking state
-    yield f"data: {json.dumps({'type': 'logic', 'content': 'Thinking...'})}\n\n"
-
-    for turn in range(3):
-        buffer = ""
-        # We start by assuming it MIGHT be a tool until proven otherwise
-        is_tool_check = True 
-        tool_detected = False
-        
-        stream_gen = stream_inference(history)
-        
-        for chunk in stream_gen:
-            buffer += chunk
-            
-            # Smart Buffering Logic to Hide JSON
-            if is_tool_check:
-                stripped = buffer.lstrip()
-                # If buffer is short, keep buffering to be safe
-                if len(stripped) < 15: 
-                    # If it starts with non-json char, safe to stream
-                    if stripped and not (stripped.startswith("{") or stripped.startswith("`")):
-                        is_tool_check = False
-                        yield f"data: {json.dumps({'type': 'token', 'content': buffer})}\n\n"
-                        buffer = ""
-                    continue
-                
-                # Buffer is long enough to decide
-                if stripped.startswith("{") or stripped.startswith("```json"):
-                    # Takes priority - buffer silently
-                    continue
-                else:
-                    # Not a tool, flush buffer and stream normally
-                    is_tool_check = False
-                    yield f"data: {json.dumps({'type': 'token', 'content': buffer})}\n\n"
-                    buffer = ""
-            else:
-                # Not checking for tools anymore in this turn
-                yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
-
-        # End of stream chunk processing. Check if we have a full JSON tool call in buffer.
-        # Remove markdown code blocks if present
-        clean_buffer = buffer.strip().replace("```json", "").replace("```", "").strip()
-        
-        if is_tool_check and clean_buffer.startswith("{") and clean_buffer.endswith("}"):
-            try:
-                tool_call = json.loads(clean_buffer)
-                if "tool" in tool_call and tool_call["tool"] in TOOLS:
-                    t_name = tool_call["tool"]
-                    t_query = tool_call.get("query", "")
-                    
-                    # Send logic event (updates the thinking bubble)
-                    yield f"data: {json.dumps({'type': 'logic', 'content': f'Accessing {t_name}...'})}\n\n"
-                    
-                    result = TOOLS[t_name](t_query)
-                    update_history(user_id, "assistant", buffer) # Save raw json to history context
-                    update_history(user_id, "system", f"[TOOL_OUTPUT]: {result}")
-                    tool_detected = True
-                else:
-                    # Valid JSON but not a recognized tool? Stream it.
-                    yield f"data: {json.dumps({'type': 'token', 'content': buffer})}\n\n"
-            except:
-                # Malformed JSON, stream it
-                yield f"data: {json.dumps({'type': 'token', 'content': buffer})}\n\n"
-        else:
-            # Buffer contained text that wasn't a tool
-            if buffer and is_tool_check:
-                 yield f"data: {json.dumps({'type': 'token', 'content': buffer})}\n\n"
-            
-            if not is_tool_check and buffer:
-                # Just appending whatever was left
-                pass
-            
-            # If we just finished a text response, save it to history
-            # Note: In a real prod app, we'd accumulate the full text properly.
-            # Here we assume the buffer + streamed parts are the msg.
-            if not tool_detected:
-                update_history(user_id, "assistant", "...") # Placeholder for history consistency
-
-        if not tool_detected:
-            break
-
-    yield f"data: {json.dumps({'type': 'done'})}\n\n"
-
-# -----------------------------------------------------------------------------
-# 8. ROUTES
-# -----------------------------------------------------------------------------
-@app.route("/", methods=["GET"])
+@app.route("/")
 def index():
     return render_template_string(HTML_TEMPLATE)
 
-@app.route("/api/chat_stream", methods=["POST"])
+@app.route("/chat/stream", methods=["POST"])
 def chat_stream():
-    data = request.json or {}
-    user_id = data.get("user_id", "guest")
-    message = data.get("message", "")
-    if not message: return jsonify({"error": "empty message"}), 400
+    data = request.json
+    user_msg = data.get("message")
+    sid = data.get("session_id", str(uuid.uuid4()))
+    
+    if not user_msg:
+        return jsonify({"error": "No message"}), 400
 
-    return Response(
-        stream_with_context(process_chat_stream(user_id, message)),
-        mimetype='text/event-stream'
-    )
+    # Update History
+    history = get_session(sid)
+    history.append({"role": "user", "content": user_msg})
+
+    def generate():
+        # Yield a ping to confirm connection
+        yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+        
+        full_response_accumulator = ""
+        
+        # Stream response
+        for event in call_inference_stream(history):
+            # Capture content to save to history later
+            if event.startswith("data: "):
+                try:
+                    evt_data = json.loads(event[6:])
+                    if evt_data['type'] == 'token':
+                        full_response_accumulator += evt_data['content']
+                except: pass
+            yield event
+            
+        # Save Assistant Response to Memory
+        if full_response_accumulator and not full_response_accumulator.strip().startswith("{"):
+            history.append({"role": "assistant", "content": full_response_accumulator})
+        
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
 @app.route("/api/reset", methods=["POST"])
 def reset():
-    data = request.json or {}
-    uid = data.get("user_id")
-    if uid in CHAT_SESSIONS: del CHAT_SESSIONS[uid]
-    return jsonify({"status": "ok"})
+    sid = request.json.get("session_id")
+    if sid in SESSIONS:
+        del SESSIONS[sid]
+    return jsonify({"status": "cleared", "new_id": str(uuid.uuid4())})
 
-# -----------------------------------------------------------------------------
-# 9. PROFESSIONAL UI TEMPLATE
-# -----------------------------------------------------------------------------
+# ----------------------------
+# 7. Frontend Template (HTML/CSS/JS)
+# ----------------------------
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kust Bots Support</title>
-    <link href="[https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap)" rel="stylesheet">
+    <title>KUST BOTS | Support Terminal</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-body: #0f172a;
-            --bg-sidebar: #1e293b;
-            --bg-chat: #0f172a;
-            --bg-message-bot: #334155;
-            --bg-message-user: #2563eb;
-            --bg-logic: rgba(59, 130, 246, 0.2);
-            --border-color: #334155;
-            --text-primary: #f8fafc;
-            --text-secondary: #cbd5e1;
-            --text-accent: #60a5fa;
-            --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.3);
+            --bg: #050505;
+            --panel: #0f0f13;
+            --border: #27272a;
+            --primary: #3b82f6; /* Blue */
+            --accent: #8b5cf6; /* Purple */
+            --text: #e4e4e7;
+            --text-dim: #a1a1aa;
+            --tool-bg: #1e1e24;
+            --success: #10b981;
         }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
         
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-body);
-            color: var(--text-primary);
-            height: 100vh;
-            display: flex;
+        * { box-sizing: border-box; }
+        body { 
+            margin: 0; padding: 0; 
+            background-color: var(--bg); 
+            color: var(--text); 
+            font-family: 'Inter', sans-serif; 
+            height: 100vh; 
+            display: flex; 
             overflow: hidden;
-            font-size: 15px;
-            line-height: 1.6;
         }
 
-        /* SIDEBAR */
+        /* --- Sidebar --- */
         .sidebar {
-            width: 280px;
-            background-color: var(--bg-sidebar);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
+            width: 300px;
+            background: var(--panel);
+            border-right: 1px solid var(--border);
             padding: 24px;
-            z-index: 10;
-        }
-        
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-weight: 700;
-            font-size: 18px;
-            color: white;
-            margin-bottom: 32px;
-            letter-spacing: -0.025em;
-        }
-        
-        .brand-icon {
-            width: 32px; height: 32px;
-            background: linear-gradient(135deg, #3b82f6, #2563eb);
-            border-radius: 8px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 18px;
-        }
-
-        .nav-btn {
-            background: transparent;
-            border: 1px solid transparent;
-            color: var(--text-secondary);
-            padding: 10px 12px;
-            border-radius: 6px;
-            text-align: left;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s;
-            margin-bottom: 4px;
-        }
-        .nav-btn:hover { background-color: rgba(255, 255, 255, 0.05); color: white; }
-
-        /* MAIN */
-        .main {
-            flex: 1;
             display: flex;
             flex-direction: column;
-            background-color: var(--bg-chat);
+            gap: 20px;
+            display: none; /* Hidden on mobile by default */
         }
+        @media(min-width: 768px) { .sidebar { display: flex; } }
 
+        .brand { 
+            font-family: 'JetBrains Mono', monospace; 
+            font-weight: 700; 
+            font-size: 1.2rem; 
+            color: #fff; 
+            letter-spacing: -1px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .brand span { color: var(--primary); }
+
+        .status-box {
+            padding: 12px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            font-size: 0.85rem;
+        }
+        .status-indicator {
+            display: inline-block; width: 8px; height: 8px; 
+            border-radius: 50%; background: var(--text-dim);
+            margin-right: 8px;
+        }
+        .status-indicator.live { background: var(--success); box-shadow: 0 0 10px var(--success); }
+        .status-indicator.busy { background: var(--accent); animation: pulse 1s infinite; }
+
+        .quick-actions { display: flex; flex-direction: column; gap: 8px; }
+        .action-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+        .action-btn:hover { border-color: var(--primary); color: #fff; background: rgba(59,130,246,0.1); }
+
+        /* --- Main Chat --- */
+        .main { flex: 1; display: flex; flex-direction: column; position: relative; }
+        
         .chat-container {
             flex: 1;
+            padding: 20px;
             overflow-y: auto;
-            padding: 30px;
             display: flex;
             flex-direction: column;
             gap: 20px;
             scroll-behavior: smooth;
+        }
+
+        /* Message Bubbles */
+        .message {
             max-width: 800px;
             margin: 0 auto;
             width: 100%;
-        }
-        
-        .chat-container::-webkit-scrollbar { width: 6px; }
-        .chat-container::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
-
-        /* MESSAGES */
-        .msg-row {
             display: flex;
-            width: 100%;
-            animation: slideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            gap: 16px;
+            opacity: 0;
+            animation: fadeIn 0.3s forwards;
         }
-        
-        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        .msg-row.user { justify-content: flex-end; }
-        .msg-row.bot { justify-content: flex-start; }
+        .message.user { justify-content: flex-end; }
         
         .avatar {
-            width: 32px; height: 32px;
+            width: 36px; height: 36px;
             border-radius: 8px;
+            background: var(--panel);
+            border: 1px solid var(--border);
             display: flex; align-items: center; justify-content: center;
-            font-size: 16px;
-            margin-right: 12px;
+            font-size: 1.2rem;
             flex-shrink: 0;
-            background: linear-gradient(135deg, #475569, #334155);
-            color: white;
-            box-shadow: var(--shadow-sm);
         }
+        .message.user .avatar { order: 2; background: var(--primary); border-color: var(--primary); color: white; }
         
-        .msg-bubble {
-            max-width: 85%;
-            padding: 14px 18px;
+        .bubble {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            padding: 12px 18px;
             border-radius: 12px;
-            font-size: 15px;
+            font-size: 0.95rem;
+            line-height: 1.6;
             position: relative;
-            box-shadow: var(--shadow-sm);
-            word-wrap: break-word;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
-
-        .msg-row.user .msg-bubble {
-            background-color: var(--bg-message-user);
+        .message.user .bubble {
+            background: var(--primary);
             color: white;
-            border-bottom-right-radius: 2px;
+            border-color: var(--primary);
+            text-align: right;
         }
 
-        .msg-row.bot .msg-bubble {
-            background-color: var(--bg-message-bot);
-            color: var(--text-primary);
-            border-bottom-left-radius: 2px;
-        }
-
-        /* THINKING / LOGIC ANIMATIONS */
-        .thinking-content {
+        /* Tool Animation Card */
+        .tool-card {
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--tool-bg);
+            border: 1px solid var(--accent);
+            border-left: 4px solid var(--accent);
+            padding: 10px 16px;
+            border-radius: 6px;
+            color: #d8b4fe;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
             display: flex;
             align-items: center;
-            gap: 10px;
-            font-size: 14px;
-            color: var(--text-accent);
-            font-style: italic;
+            gap: 12px;
+            animation: slideIn 0.4s ease-out;
+            margin-bottom: -10px; /* Pull closer to next msg */
         }
-        
-        .pulse-dot {
-            width: 8px; height: 8px;
-            background-color: var(--text-accent);
+        .tool-spinner {
+            width: 14px; height: 14px;
+            border: 2px solid rgba(139, 92, 246, 0.3);
+            border-top-color: var(--accent);
             border-radius: 50%;
-            animation: pulse 1.5s infinite;
+            animation: spin 1s linear infinite;
         }
         
-        @keyframes pulse {
-            0% { opacity: 0.4; transform: scale(0.8); }
-            50% { opacity: 1; transform: scale(1.1); }
-            100% { opacity: 0.4; transform: scale(0.8); }
-        }
+        /* Markdown Styles within Bubbles */
+        .bubble p { margin: 0 0 10px 0; }
+        .bubble p:last-child { margin: 0; }
+        .bubble code { background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
+        .bubble pre { background: #000; padding: 10px; border-radius: 8px; overflow-x: auto; }
+        .bubble ul { padding-left: 20px; }
 
-        /* INPUT */
-        .input-container {
-            padding: 24px;
-            border-top: 1px solid var(--border-color);
-            background: var(--bg-body);
-            display: flex;
-            justify-content: center;
+        /* Input Area */
+        .input-area {
+            padding: 20px;
+            background: rgba(5,5,5,0.9);
+            border-top: 1px solid var(--border);
+            backdrop-filter: blur(10px);
         }
-        
         .input-wrapper {
             max-width: 800px;
-            width: 100%;
+            margin: 0 auto;
+            position: relative;
             display: flex;
-            background: var(--bg-sidebar);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 6px;
-            transition: 0.2s;
+            gap: 10px;
         }
-        
-        .input-wrapper:focus-within { border-color: var(--text-accent); }
-
         input {
-            flex: 1;
-            background: transparent;
-            border: none;
+            width: 100%;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            padding: 14px 18px;
+            border-radius: 10px;
             color: white;
-            padding: 12px 16px;
-            font-family: 'Inter', sans-serif;
-            font-size: 15px;
+            font-family: inherit;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
         }
-        
-        button.send-btn {
-            background: var(--bg-message-user);
+        input:focus { border-color: var(--primary); }
+        button.send {
+            background: var(--primary);
             color: white;
             border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
+            padding: 0 24px;
+            border-radius: 10px;
             font-weight: 600;
             cursor: pointer;
-            transition: 0.2s;
+            transition: opacity 0.2s;
         }
-        button.send-btn:hover { opacity: 0.9; }
-        button.send-btn:disabled { background: #475569; cursor: not-allowed; }
+        button.send:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .msg-bubble strong { color: white; font-weight: 600; }
-        .msg-bubble code { background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
-        
-        @media (max-width: 768px) {
-            .sidebar { display: none; }
-            .chat-container { padding: 15px; }
-            .msg-bubble { max-width: 90%; }
-        }
+        /* Animations */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+
+        /* Thinking Dots */
+        .thinking { display: flex; gap: 4px; padding: 4px; }
+        .dot { width: 6px; height: 6px; background: var(--text-dim); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
+        .dot:nth-child(1) { animation-delay: -0.32s; }
+        .dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
     </style>
 </head>
 <body>
 
+    <!-- Sidebar -->
     <div class="sidebar">
         <div class="brand">
-            <div class="brand-icon">K</div>
-            Kust Bots
+            <span>//</span> KUST BOTS
         </div>
-        <button class="nav-btn" onclick="quickAsk('What are the Kustify plans?')">Server Plans</button>
-        <button class="nav-btn" onclick="quickAsk('Music bot commands?')">Music Commands</button>
-        <button class="nav-btn" onclick="quickAsk('Chat Farmer info?')">Chat Farmer</button>
-        <div style="margin-top:auto">
-            <button class="nav-btn" style="color:#ef4444" onclick="reset()">Reset Chat</button>
-        </div>
-    </div>
-
-    <div class="main">
-        <div class="chat-container" id="chat">
-            <div class="msg-row bot">
-                <div class="avatar">🤖</div>
-                <div class="msg-bubble">
-                    <strong>Support Online.</strong><br>
-                    Welcome to Kust Bots. How can I help you today?
-                </div>
-            </div>
+        <div class="status-box">
+            <div id="status-dot" class="status-indicator live"></div>
+            <span id="status-text">System Online</span>
         </div>
         
-        <div class="input-container">
+        <div class="quick-actions">
+            <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Quick Access</div>
+            <button class="action-btn" onclick="ask('What is Kustify Hosting pricing?')">💰 Hosting Plans</button>
+            <button class="action-btn" onclick="ask('How do I setup the Stake Chat Farmer?')">🤖 Stake Farmer Setup</button>
+            <button class="action-btn" onclick="ask('Show me commands for Frozen Music Bot')">🎵 Music Bot Cmds</button>
+            <button class="action-btn" onclick="ask('Verify if @kustsupport is real')">⚠️ Verify Channel</button>
+        </div>
+
+        <div style="margin-top:auto; font-size:0.75rem; color:var(--text-dim);">
+            Session ID: <span id="sess-id" style="font-family:monospace">...</span><br>
+            <a href="#" onclick="resetSession()" style="color:var(--accent)">Reset Session</a>
+        </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+        <div class="chat-container" id="chat">
+            <!-- Welcome Message -->
+            <div class="message">
+                <div class="avatar">🤖</div>
+                <div class="bubble">
+                    <p><strong>Connected to Kust Support Core.</strong></p>
+                    <p>I can help with Kustify, Music Bots, Stake Tools, and Billing. How can I assist you today?</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="input-area">
             <div class="input-wrapper">
-                <input type="text" id="prompt" placeholder="Type a message..." autocomplete="off">
-                <button class="send-btn" id="sendBtn">Send</button>
+                <input type="text" id="userInput" placeholder="Type your issue or command..." autocomplete="off">
+                <button class="send" id="sendBtn" onclick="sendMessage()">SEND</button>
             </div>
         </div>
     </div>
 
-    <script>
-        const uid = 'user_' + Math.random().toString(36).substr(2,6);
-        const chat = document.getElementById('chat');
-        const inp = document.getElementById('prompt');
-        const btn = document.getElementById('sendBtn');
-        let currentBotMsg = null;
-        let isGenerating = false;
+<script>
+    // Utils
+    const uuid = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
+    let session_id = localStorage.getItem('kust_sid') || uuid();
+    localStorage.setItem('kust_sid', session_id);
+    document.getElementById('sess-id').innerText = session_id.substring(0,8);
 
-        function scrollToBottom() {
-            chat.scrollTop = chat.scrollHeight;
+    const chatEl = document.getElementById('chat');
+    const inputEl = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+
+    function setBusy(busy) {
+        if(busy) {
+            statusDot.className = 'status-indicator busy';
+            statusText.innerText = 'Processing...';
+            sendBtn.disabled = true;
+            inputEl.disabled = true;
+        } else {
+            statusDot.className = 'status-indicator live';
+            statusText.innerText = 'System Online';
+            sendBtn.disabled = false;
+            inputEl.disabled = false;
+            inputEl.focus();
         }
+    }
 
-        function addMsg(role, content) {
-            const row = document.createElement('div');
-            row.className = `msg-row ${role}`;
-            const inner = role === 'bot' 
-                ? `<div class="avatar">🤖</div><div class="msg-bubble">${content}</div>`
-                : `<div class="msg-bubble">${content}</div>`;
-            row.innerHTML = inner;
-            chat.appendChild(row);
-            scrollToBottom();
-            if (role === 'bot') return row.querySelector('.msg-bubble');
-            return null;
-        }
+    function appendUserMsg(text) {
+        const div = document.createElement('div');
+        div.className = 'message user';
+        div.innerHTML = `<div class="bubble">${text}</div><div class="avatar">👤</div>`;
+        chatEl.appendChild(div);
+        scrollToBottom();
+    }
 
-        async function streamChat(text) {
-            if (isGenerating) return;
-            isGenerating = true;
-            btn.disabled = true;
-            
-            addMsg('user', text);
-            inp.value = '';
-            
-            // Create Bot bubble with "Thinking" state initially
-            currentBotMsg = addMsg('bot', `
-                <div class="thinking-content">
-                    <div class="pulse-dot"></div>
-                    <span id="thinking-text">Thinking...</span>
+    function createBotMsg() {
+        const div = document.createElement('div');
+        div.className = 'message';
+        div.innerHTML = `
+            <div class="avatar">🤖</div>
+            <div class="bubble">
+                <div class="thinking">
+                    <div class="dot"></div><div class="dot"></div><div class="dot"></div>
                 </div>
-            `);
+            </div>`;
+        chatEl.appendChild(div);
+        scrollToBottom();
+        return div.querySelector('.bubble');
+    }
 
-            try {
-                const res = await fetch('/api/chat_stream', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({user_id: uid, message: text})
-                });
+    function createToolCard(toolName) {
+        const div = document.createElement('div');
+        div.className = 'tool-card';
+        div.innerHTML = `<div class="tool-spinner"></div> <span>Executing: ${toolName}...</span>`;
+        // Insert before the last message (which is usually the bot typing)
+        chatEl.insertBefore(div, chatEl.lastElementChild);
+        scrollToBottom();
+        return div;
+    }
 
-                const reader = res.body.getReader();
-                const decoder = new TextDecoder();
-                let fullText = "";
-                let isFirstToken = true;
+    function scrollToBottom() {
+        chatEl.scrollTop = chatEl.scrollHeight;
+    }
 
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\\n\\n');
-                    
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            const jsonStr = line.slice(6);
-                            if (jsonStr === '[DONE]') break;
+    async function sendMessage() {
+        const text = inputEl.value.trim();
+        if(!text) return;
+        
+        inputEl.value = '';
+        appendUserMsg(text);
+        setBusy(true);
+
+        const botBubble = createBotMsg(); // Create placeholder with dots
+        let currentText = "";
+        let isFirstToken = true;
+
+        try {
+            const response = await fetch('/chat/stream', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ message: text, session_id: session_id })
+            });
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\\n\\n'); // Split SSE events
+                
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.substring(6));
                             
-                            try {
-                                const data = JSON.parse(jsonStr);
-                                
-                                if (data.type === 'token') {
-                                    if (isFirstToken) {
-                                        // Replace "Thinking" content with empty text span
-                                        currentBotMsg.innerHTML = ''; 
-                                        isFirstToken = false;
-                                    }
-                                    fullText += data.content;
-                                    const html = fullText
-                                        .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>')
-                                        .replace(/\\n/g, '<br>');
-                                    currentBotMsg.innerHTML = html;
-                                    scrollToBottom();
-                                } 
-                                else if (data.type === 'logic') {
-                                    // Update the text inside the thinking bubble
-                                    const thinkingTxt = currentBotMsg.querySelector('#thinking-text');
-                                    if(thinkingTxt) {
-                                        thinkingTxt.innerText = data.content;
-                                    }
+                            if (data.type === 'ping') continue;
+                            
+                            if (data.type === 'tool_start') {
+                                createToolCard(data.input || data.tool);
+                            }
+                            
+                            if (data.type === 'token') {
+                                if (isFirstToken) {
+                                    botBubble.innerHTML = ''; // Remove thinking dots
+                                    isFirstToken = false;
                                 }
-                            } catch (e) {}
+                                currentText += data.content;
+                                botBubble.innerHTML = marked.parse(currentText);
+                                scrollToBottom();
+                            }
+                            
+                            if (data.type === 'error') {
+                                botBubble.innerHTML = `<span style="color:#ef4444">Error: ${data.content}</span>`;
+                            }
+
+                        } catch (e) {
+                            console.log("Parse error", e);
                         }
                     }
                 }
-            } catch (e) {
-                if (currentBotMsg) currentBotMsg.innerHTML = '<span style="color:#fca5a5">Connection Error. Please retry.</span>';
             }
-            
-            isGenerating = false;
-            btn.disabled = false;
-            inp.focus();
+        } catch (err) {
+            botBubble.innerHTML = "Connection failed. Please reset.";
+        } finally {
+            setBusy(false);
         }
+    }
 
-        function quickAsk(t) { streamChat(t); }
-        function reset() { 
-            fetch('/api/reset', {method:'POST', body:JSON.stringify({user_id:uid}), headers:{'Content-Type':'application/json'}});
-            chat.innerHTML = '';
-            // Manually re-add welcome message
-            const row = document.createElement('div');
-            row.className = 'msg-row bot';
-            row.innerHTML = '<div class="avatar">🤖</div><div class="msg-bubble"><strong>Chat Reset.</strong><br>How can I help?</div>';
-            chat.appendChild(row);
+    function ask(q) {
+        inputEl.value = q;
+        sendMessage();
+    }
+
+    async function resetSession() {
+        if(confirm("Clear chat history?")) {
+            await fetch('/api/reset', {
+                method:'POST', 
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({session_id})
+            });
+            location.reload();
         }
+    }
 
-        btn.onclick = () => { if(inp.value.trim()) streamChat(inp.value.trim()); };
-        inp.onkeydown = (e) => { if(e.key === 'Enter' && inp.value.trim()) streamChat(inp.value.trim()); };
-    </script>
+    // Enter key support
+    inputEl.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+    });
+
+</script>
 </body>
 </html>
 """
 
-# -----------------------------------------------------------------------------
-# 10. RUNNER
-# -----------------------------------------------------------------------------
 if __name__ == "__main__":
+    # Heroku/Production Entry Point
     port = int(os.environ.get("PORT", 8080))
-    logger.info(f"KUST OS ONLINE : PORT {port}")
+    logger.info(f"Server starting on port {port}")
     app.run(host="0.0.0.0", port=port, threaded=True)
