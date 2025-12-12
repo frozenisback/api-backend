@@ -47,8 +47,8 @@ KB = {
         "stake_chat_farmer": {
             "display_name": "AI Stake Chat Farmer",
             "access": "@kustchatbot",
-            "description": "Human-like autonomous chat emulator for Stake servers. Includes setup video in Hindi.",
-            "price": "Free trial available. Paid subscriptions via Crypto or UPI.",
+            "description": "Human-like autonomous chat emulator for Stake servers with realistic conversation patterns.",
+            "price": "Free 3-hour trial",
             "features": [
                 "Per-user memory & topic tracking",
                 "Mood adaptation & tone shifting",
@@ -58,31 +58,35 @@ KB = {
                 "Multi-account farming at scale",
                 "24/7 autonomous operation"
             ],
-            "setup": [
-                "1. Go to @kustchatbot.",
-                "2. New users: Click 'Get your trial now'.",
-                "3. Enter your REAL Stake username (Case Sensitive).",
-                "4. Bot sends an unpacked extension (.zip). Download and unzip it.",
-                "5. Open Chrome, go to `chrome://extensions`, enable 'Developer Mode'.",
-                "6. Click 'Load Unpacked' and select the unzipped folder.",
-                "7. Go to Stake.com (or mirror like https://stake.com/casino/games/mines).",
-                "8. Click the extension icon to enable it, then REFRESH the page.",
-                "9. Look for the Chat Farmer popup on the left side.",
-                "10. Click the 'Enable AI' button to start farming."
+            "setup_new_user": [
+                "Go to @kustchatbot and click 'Get Your Trial Now' button",
+                "Enter your Stake username (case-sensitive)",
+                "Download the unpacked extension provided by the bot",
+                "Unzip the extension file",
+                "Open Chrome with Developer Tools enabled",
+                "Navigate to stake.com or any Stake mirror (e.g., https://stake.com/casino/games/mines)",
+                "Go to Chrome extensions and click on our extension to enable it",
+                "Refresh the page to see the chat farmer popup on the left side",
+                "Watch the setup video provided by the bot (in Hindi) for detailed guidance"
             ],
-            "subscription": [
-                "If trial is over:",
-                "1. Go to @kustchatbot and send `/start`.",
-                "2. Click 'Buy Subscription'.",
-                "3. Enter your Stake username.",
-                "4. Choose Payment:",
-                "   - Crypto: Automated via OxaPay.",
-                "   - UPI: Processed manually."
+            "setup_existing_user": [
+                "Go to @kustchatbot and send /start",
+                "If your trial has expired, click 'Buy Subscription' button",
+                "Enter your Stake username (case-sensitive)",
+                "Choose payment method: UPI (manual processing) or Crypto (automated via ValoXaPay)",
+                "After payment, enable the extension in Chrome",
+                "Navigate to stake.com and look for the 'Enable AI' button",
+                "Click the 'Enable AI' button to start the chat farmer"
+            ],
+            "payment_methods": [
+                "UPI: Processed manually",
+                "Crypto: Processed automatically via ValoXaPay"
             ],
             "support_notes": [
-                "User must provide real Stake username (Case Sensitive).",
-                "Extension requires Developer Mode in Chrome.",
-                "Must refresh Stake page after enabling extension."
+                "Ask for server/country and number of accounts",
+                "Common fix: Reset memory profile or timing windows",
+                "Ensure your Stake username is entered correctly (case-sensitive)",
+                "Make sure Developer Tools are enabled in Chrome before loading the extension"
             ]
         },
         "stake_code_claimer": {
@@ -307,16 +311,22 @@ def search_kb(query):
                     project_info += f"- {command}\n"
                 project_info += "\n"
                 
-            if 'setup' in data:
-                project_info += "**Setup Steps:**\n"
-                for step in data['setup']:
+            if 'setup_new_user' in data:
+                project_info += "**Setup for New Users:**\n"
+                for step in data['setup_new_user']:
                     project_info += f"- {step}\n"
                 project_info += "\n"
-
-            if 'subscription' in data:
-                project_info += "**Subscription & Renewal:**\n"
-                for step in data['subscription']:
+                
+            if 'setup_existing_user' in data:
+                project_info += "**Setup for Existing Users:**\n"
+                for step in data['setup_existing_user']:
                     project_info += f"- {step}\n"
+                project_info += "\n"
+                
+            if 'payment_methods' in data:
+                project_info += "**Payment Methods:**\n"
+                for method in data['payment_methods']:
+                    project_info += f"- {method}\n"
                 project_info += "\n"
                 
             if 'plans' in data:
