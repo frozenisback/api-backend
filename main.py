@@ -50,7 +50,7 @@ KB = {
             "price": "Free 3-hour trial available for new users",
             "features": [
                 "Autonomous chat generator (not spam — human-like behavioural model)",
-                "Farms XP/Levels 24/7 without interruptions",
+                "Farms Rains 24/7 without interruptions",
                 "Multi-account support for users managing several Stake accounts",
                 "Works on all Stake servers and mirror links",
                 "AI-driven adaptive responses based on mood & chat context",
@@ -97,7 +97,7 @@ KB = {
         "frozen_music": {
             "name": "Frozen Music Bot",
             "bot": "@vcmusiclubot",
-            "commands": ["/play", "/vplay", "/skip", "/couple", "/tmute"],
+            "commands": ["/play", "/vplay", "/playlist", "/skip", "/pause", "/resume", "/stop", "/end", "/couple", "/ping", "/clear", "/mute", "/unmute", "/tmute", "/kick", "/ban", "/unban"],
             "features": [
                 "High-performance VC music streaming with ultra-low latency",
                 "Video playback support in groups and channels",
