@@ -1,5 +1,5 @@
 # main.py
-# KUST BOTS OFFICIAL SUPPORT SYSTEM (Production Release - Debug Enabled)
+# KUST BOTS OFFICIAL SUPPORT SYSTEM (Production Release - Fixed Streaming)
 # Single-File Flask Application with Server-Sent Events (SSE) Streaming
 # Features: Real-time Typing, Tool Execution Visuals, Premium UI, Auto-Healing Sessions.
 
@@ -211,15 +211,15 @@ def call_inference_stream(messages):
                 if not line: continue
                 line = line.decode('utf-8')
                 
-                # Debug logging for the first few lines to verify format
-                if chunk_count < 3:
-                    logger.info(f"Raw Stream Line: {line}")
-                
-                if line.startswith('data: '):
-                    data_str = line[6:]
-                    if data_str.strip() == '[DONE]':
+                # Flexible parsing: handle 'data: ' and 'data:'
+                if line.startswith('data:'):
+                    # Remove the 'data:' prefix and strip whitespace
+                    data_str = line[5:].strip()
+                    
+                    if data_str == '[DONE]':
                         logger.info("Stream received [DONE] signal.")
                         break
+                    
                     try:
                         chunk_json = json.loads(data_str)
                         
@@ -236,7 +236,9 @@ def call_inference_stream(messages):
                             # Yield token to frontend
                             yield f"data: {json.dumps({'type': 'token', 'content': delta})}\n\n"
                     except Exception as e:
-                        logger.warning(f"Failed to parse chunk: {data_str} | Error: {e}")
+                        # Only log errors for lines that look like JSON but fail
+                        if data_str.startswith('{'):
+                             logger.warning(f"Failed to parse chunk: {data_str[:50]}... | Error: {e}")
             
             if chunk_count == 0:
                 logger.warning("Stream finished but NO tokens were parsed. Check API response format.")
