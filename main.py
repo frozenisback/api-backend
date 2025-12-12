@@ -1,468 +1,666 @@
 # main.py
-# Complete single-file Flask app — support assistant with tool-execution capability and improved UI.
-# Deploy as-is. Requires env vars: INFERENCE_URL, INFERENCE_KEY, INFERENCE_MODEL_ID
-# Use Procfile with gunicorn for production on Heroku:
-# web: gunicorn main:app --timeout 300 --keep-alive 25 --workers 1 --threads 4
+# -----------------------------------------------------------------------------
+# KUST BOTS PREMIUM SUPPORT SYSTEM (Production Ready)
+# Single-file Flask application with embedded "Cyber-SaaS" UI.
+#
+# DEPLOYMENT:
+#   - Requires: pip install flask requests gunicorn
+#   - Env Vars: INFERENCE_URL, INFERENCE_KEY, INFERENCE_MODEL_ID
+#   - Run: gunicorn main:app --timeout 120 --workers 2 --threads 4
+# -----------------------------------------------------------------------------
 
 import os
 import re
 import time
 import json
+import uuid
 import logging
 import requests
-from flask import Flask, request, jsonify, render_template_string
+from datetime import datetime
+from flask import Flask, request, jsonify, render_template_string, session
 
-# ----------------------------
-# Logging
-# ----------------------------
+# -----------------------------------------------------------------------------
+# 1. CONFIGURATION & LOGGING
+# -----------------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    format="%(asctime)s [%(levelname)s] [KUST-SUPPORT] %(message)s"
 )
-logger = logging.getLogger("kust-support-tools")
+logger = logging.getLogger(__name__)
 
-# ----------------------------
-# Env / Inference config
-# ----------------------------
-INFERENCE_KEY = os.getenv("INFERENCE_KEY")
-INFERENCE_MODEL_ID = os.getenv("INFERENCE_MODEL_ID")
-BASE_URL = os.getenv("INFERENCE_URL")
+# Load Environment Variables
+INFERENCE_KEY = os.getenv("INFERENCE_KEY", "")
+INFERENCE_MODEL_ID = os.getenv("INFERENCE_MODEL_ID", "")
+BASE_URL = os.getenv("INFERENCE_URL", "")
 
+# Validate Critical Config
 if not (INFERENCE_KEY and INFERENCE_MODEL_ID and BASE_URL):
-    logger.warning("One or more inference env vars are missing (INFERENCE_KEY, INFERENCE_MODEL_ID, INFERENCE_URL).")
+    logger.warning("CRITICAL: Missing Inference Env Vars (INFERENCE_KEY/URL/MODEL_ID). Bot will fail to reply.")
 
 API_URL = f"{BASE_URL.rstrip('/')}/v1/chat/completions"
-HEADERS = {"Authorization": f"Bearer {INFERENCE_KEY}", "Content-Type": "application/json"}
+HEADERS = {
+    "Authorization": f"Bearer {INFERENCE_KEY}",
+    "Content-Type": "application/json"
+}
 
-# ----------------------------
-# Knowledge base (tools data)
-# Keep this updated — the assistant can call tools to fetch these details.
-# ----------------------------
+# -----------------------------------------------------------------------------
+# 2. KNOWLEDGE BASE (Product Data)
+# -----------------------------------------------------------------------------
 KB = {
-    "projects": {
+    "products": {
+        "stake_chat_farmer": {
+            "name": "Stake Chat Farmer",
+            "bot_link": "@kustchatbot",
+            "summary": "Fully autonomous human-like chat generator. Simulates real human patterns (mood, context, anti-spam).",
+            "features": [
+                "Per-user memory & mood adaptation",
+                "Context recognition",
+                "Works on all Stake country servers",
+                "Multi-account support",
+                "24/7 autonomous operation"
+            ],
+            "pricing": "Free 3-hour trial available.",
+            "notes": "Not a spam bot; designed for farming chat levels/XP legitimately."
+        },
+        "stake_code_claimer": {
+            "name": "Stake Code Claimer",
+            "summary": "Automated system to monitor channels and claim codes instantly.",
+            "features": [
+                "Monitors Stake Telegram channels",
+                "Detects new codes instantly",
+                "Auto-redeems across accounts",
+                "Runs 24/7 without user input"
+            ]
+        },
         "frozen_music": {
-            "name": "Frozen Music",
-            "summary": "High-performance Telegram VC music bot (vcmusiclubot). Distributed playback system, caching, Cloudflare Workers routing, pre-cache when queueing for instant playback.",
+            "name": "Frozen Music Bot",
+            "summary": "High-performance VC music bot with distributed backend.",
             "commands": {
-                "play": "Add a song to the queue. Usage: /play <title>",
-                "stop": "Stop playback and clear the queue. Usage: /stop",
-                "skip": "Skip current track. Usage: /skip",
-                "queue": "Show current queue. Usage: /queue",
-                "vol": "Set volume. Usage: /vol <0-100>"
+                "/play": "Play audio (YT/Spotify/Resso/Apple/SC)",
+                "/vplay": "Play video + audio",
+                "/playlist": "Manage playlist",
+                "/skip": "Skip track",
+                "/couple": "Pick random pair daily"
             },
-            "notes": "Supports distributed playback nodes with fallback servers and pre-caching. Deployed in 30 parts. Uses metadata server and download distribution fallback to yt-dlp."
+            "admin_commands": ["/mute", "/unmute", "/kick", "/ban"],
+            "tech": "Distributed backend, caching, multi-node infrastructure."
         },
         "kustify": {
             "name": "Kustify Hosting",
-            "summary": "Telegram bot hosting by Kust Bots. Dirt-cheap plans with instant deployment and auto-restore features.",
+            "bot_link": "@kustifybot",
+            "summary": "Premium bot hosting platform. Deploy via Telegram.",
             "plans": {
-                "ember": "0.25 CPU / 512MB RAM — $1.44/month",
-                "flare": "0.5 CPU / 1GB RAM — $2.16/month",
-                "inferno": "1 CPU / 2GB RAM — $3.60/month"
+                "Ember": "0.25 CPU / 512MB RAM — $1.44/month",
+                "Flare": "0.5 CPU / 1GB RAM — $2.16/month",
+                "Inferno": "1 CPU / 2GB RAM — $3.60/month"
             },
-            "notes": "99.9% uptime, global routing, auto-restores/crash-proof, deploy via @kustifybot."
+            "billing": "Stops bots cost 2 sparks/day for standby.",
+            "commands": ["/host", "/mybots", "/logs", "/env", "/balance", "/buysparks"]
         },
-        "dash_game": {
-            "name": "Dash — Geometry Dash style",
-            "summary": "Custom HTML Canvas + JS geometry-dash style prototype. Physics, obstacles, powerups, dynamic music sync, difficulty scaling. No engines used.",
-            "play_url": "https://dash.kustbotsweb.workers.dev/",
-            "notes": "Prototype stage; upcoming features include pattern-based levels and beat-synced obstacles."
-        },
-        "downloader_api": {
-            "name": "YouTube Downloader API",
-            "summary": "Flask + yt-dlp based audio/video downloader, low-resource, supports search and Spotify->YouTube resolution.",
-            "notes": "Designed to be lightweight and stream audio compatible with py-tgcalls."
+        "custom_bots": {
+            "name": "Paid Custom Bots",
+            "summary": "Bespoke development services.",
+            "offerings": [
+                "Custom Telegram bots",
+                "Custom commands ($2-$5 depending on complexity)",
+                "White-label music bots"
+            ],
+            "music_bot_pricing": {
+                "Tier 1": "$4/mo + $6 setup (4-5 VCs)",
+                "Tier 2": "$8/mo + $10 setup (~15 VCs)",
+                "Tier 3": "$20/mo + $25 setup (~50 VCs)"
+            }
         }
     },
-    "global_notes": "Kust Bots is an engineering-first team: fast, stable, and focused on backend and Telegram infra. Support tone is direct and no-nonsense."
+    "compliance": {
+        "official_channel": "@kustbots",
+        "official_support": "@kustbotschat",
+        "owner": "@KustDev",
+        "rules": [
+            "Never mention bonuses, drops, or gambling promos.",
+            "Never start convo with moderator.",
+            "Never push sales; only explain pricing.",
+            "Warn users about fake accounts."
+        ]
+    }
 }
 
-# ----------------------------
-# Flask app + in-memory sessions
-# ----------------------------
-app = Flask(__name__)
-CHAT_SESSIONS = {}  # user_id -> list of messages (OpenAI chat format)
+# -----------------------------------------------------------------------------
+# 3. SYSTEM PROMPT
+# -----------------------------------------------------------------------------
+SYSTEM_PROMPT = f"""
+You are the OFFICIAL SUPPORT AGENT for Kust Bots.
+Your name is Kust Assistant. You are engineering-first, professional, and precise.
 
-# ----------------------------
-# System prompt instructing agent how to call tools
-# ----------------------------
-SYSTEM_PROMPT = """
-You are Kust Bots Support Assistant. You are engineering-first, direct, and concise.
+**CORE IDENTITY:**
+- Official Channel: @kustbots
+- Official Support Group: @kustbotschat
+- Owner: @KustDev
+- ANY other channel/account is FAKE. Warn users immediately if they mention others.
 
-**TOOL USAGE PROTOCOL (READ CAREFULLY)**
-- If you need up-to-date factual info about Kust Bots projects, commands, or documentation, CALL the tool by returning a single JSON object (no extra text) in your assistant response exactly like:
-{"tool":"<tool_name>","input":{"query":"...","project":"<project_key>"}}
+**YOUR KNOWLEDGE BASE (Use Tools to access details):**
+- Products: Stake Chat Farmer, Stake Code Claimer, Frozen Music Bot, Kustify Hosting, Custom Bots.
+- Data Source: You have access to a tool `get_kust_info` to get specs/pricing.
 
-- Supported tool names:
-  - "list_projects" -> no input required. Returns project keys and short names.
-  - "get_project_info" -> input: {"project":"frozen_music"} returns detailed project description and notes.
-  - "list_commands" -> input: {"project":"frozen_music"} returns commands and short usage strings.
-  - "search_kb" -> input: {"query":"how to play music bot"} returns matching KB excerpts.
+**COMPLIANCE & BEHAVIOR (CRITICAL):**
+1. **never mention any other brand else kustbots** 
+2. **NO SALES PUSH:** Explain pricing clearly when asked, but do not "sell" or pressure.
+3. **BRIEF & DIRECT:** Answers should be short (1-4 sentences). Use bullet points for lists.
+4. **TECH FIRST:** If a user reports a bug, ask for: Bot Username, Error Log/Message, Screenshot.
+5. **ESCALATION:** If you cannot help, tell them to contact @Kustdev or join @kustbotschat.
 
-- After the server runs the tool, it will append the tool output into the conversation and call you again. You MUST then produce a normal user-facing reply using that tool result. Do not call the tool again unless you need additional info.
+**TOOL USAGE:**
+To get details, output a SINGLE JSON object:
+{{"tool": "get_kust_info", "query": "kustify plans"}}
+{{"tool": "get_kust_info", "query": "frozen music commands"}}
 
-- When producing the final answer to the user, do NOT include raw JSON tool calls; produce normal readable text.
-
-**TONE & FORMAT**
-- Be short: 1-5 short sentences by default.
-- If giving steps, number them "1: ...", "2: ...".
-- Use "Needed: <question>" for clarifying questions.
-- If escalation is required, output exactly: "Escalate: Open support ticket" followed by the data needed to open a ticket (one-line summary, steps to reproduce, logs to collect).
-- Follow safety rules: no gambling promos, no DM-sales, no abusive shortforms.
-
-End of system instructions.
+Wait for the [TOOL_OUTPUT] system message before replying to the user.
 """
 
-# ----------------------------
-# Helper functions
-# ----------------------------
-def ensure_session(user_id: str):
+# -----------------------------------------------------------------------------
+# 4. FLASK APP & SESSION MANAGEMENT
+# -----------------------------------------------------------------------------
+app = Flask(__name__)
+app.secret_key = os.getenv("FLASK_SECRET", str(uuid.uuid4()))
+CHAT_SESSIONS = {}  # In-memory session store (user_id -> history list)
+
+def get_session_history(user_id):
     if user_id not in CHAT_SESSIONS:
         CHAT_SESSIONS[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    # Safety: trim history if too long to prevent context overflow
+    if len(CHAT_SESSIONS[user_id]) > 20:
+        # Keep system prompt + last 10 messages
+        CHAT_SESSIONS[user_id] = [CHAT_SESSIONS[user_id][0]] + CHAT_SESSIONS[user_id][-10:]
+    return CHAT_SESSIONS[user_id]
 
-def call_inference(messages, timeout=60):
-    """Call inference endpoint with defensive parsing."""
-    payload = {"model": INFERENCE_MODEL_ID, "messages": messages}
-    try:
-        r = requests.post(API_URL, json=payload, headers=HEADERS, timeout=timeout)
-    except Exception as e:
-        logger.exception("Inference call error")
-        return False, f"request error: {e}", None
-    logger.info("Inference HTTP %s", r.status_code)
-    text = r.text
-    logger.debug("Inference response text: %s", text[:2000])
-    if r.status_code != 200:
-        return False, f"HTTP {r.status_code}: {text}", None
-    try:
-        data = r.json()
-    except Exception as e:
-        return False, f"invalid json: {e}", r.text
-    # Try to extract content conservatively:
-    content = None
-    try:
-        content = data["choices"][0]["message"]["content"]
-    except Exception:
-        # fallback attempts
-        if isinstance(data.get("output"), list) and data["output"]:
-            content = data["output"][0].get("content")
-        elif isinstance(data.get("choices"), list) and data["choices"]:
-            content = data["choices"][0].get("text") or data["choices"][0].get("message", {}).get("content")
-    if content is None:
-        return False, "could not extract assistant content", data
-    return True, content, data
-
-# Tool implementations — the server executes these when model requests them
-def tool_list_projects(_input):
-    projects = KB["projects"]
-    out = [{"key": k, "name": projects[k]["name"]} for k in projects]
-    return json.dumps({"projects": out}, ensure_ascii=False)
-
-def tool_get_project_info(_input):
-    proj = _input.get("project")
-    if not proj:
-        return json.dumps({"error": "missing project key"})
-    p = KB["projects"].get(proj)
-    if not p:
-        return json.dumps({"error": f"project '{proj}' not found"})
-    return json.dumps({"project": proj, "name": p.get("name"), "summary": p.get("summary"), "notes": p.get("notes"), "extra": p.get("plans") or p.get("commands") or {}}, ensure_ascii=False)
-
-def tool_list_commands(_input):
-    proj = _input.get("project")
-    if not proj:
-        return json.dumps({"error": "missing project key"})
-    p = KB["projects"].get(proj)
-    if not p:
-        return json.dumps({"error": f"project '{proj}' not found"})
-    cmds = p.get("commands") or {}
-    return json.dumps({"project": proj, "commands": cmds}, ensure_ascii=False)
-
-def tool_search_kb(_input):
-    q = (_input.get("query") or "").lower()
-    results = []
-    for k, v in KB["projects"].items():
-        hay = " ".join([v.get("name",""), v.get("summary",""), v.get("notes","")]).lower()
-        if q in hay:
-            results.append({"project": k, "name": v.get("name"), "excerpt": v.get("summary")})
-    # fallback: global notes
-    if "kust" in q or "support" in q:
-        results.append({"global": KB.get("global_notes")})
-    return json.dumps({"query": q, "results": results}, ensure_ascii=False)
+# -----------------------------------------------------------------------------
+# 5. TOOL FUNCTIONS
+# -----------------------------------------------------------------------------
+def tool_get_kust_info(query_str):
+    """Smart search over the KB dictionary."""
+    q = str(query_str).lower()
+    
+    # Direct mapping shortcuts
+    if "farm" in q or "chat" in q: return json.dumps(KB["products"]["stake_chat_farmer"])
+    if "code" in q or "claim" in q: return json.dumps(KB["products"]["stake_code_claimer"])
+    if "music" in q or "play" in q or "frozen" in q: return json.dumps(KB["products"]["frozen_music"])
+    if "host" in q or "kustify" in q or "plan" in q or "cost" in q: return json.dumps(KB["products"]["kustify"])
+    if "custom" in q or "buy" in q: return json.dumps(KB["products"]["custom_bots"])
+    if "rule" in q or "fake" in q or "official" in q: return json.dumps(KB["compliance"])
+    
+    # Fallback: Return list of products
+    return json.dumps({
+        "available_products": list(KB["products"].keys()),
+        "official_channels": KB["compliance"]
+    })
 
 TOOLS = {
-    "list_projects": tool_list_projects,
-    "get_project_info": tool_get_project_info,
-    "list_commands": tool_list_commands,
-    "search_kb": tool_search_kb
+    "get_kust_info": tool_get_kust_info
 }
 
-# Parse assistant content to see if it requested a tool call (JSON object)
-TOOL_JSON_RE = re.compile(r'^\s*({\s*"tool"\s*:\s*".+?"\s*,.*})\s*$', re.DOTALL)
+# -----------------------------------------------------------------------------
+# 6. INFERENCE ENGINE
+# -----------------------------------------------------------------------------
+def call_inference_engine(messages):
+    """Handles the API call to the LLM."""
+    payload = {
+        "model": INFERENCE_MODEL_ID,
+        "messages": messages,
+        "temperature": 0.3, # Keep it precise
+        "max_tokens": 512
+    }
+    
+    try:
+        r = requests.post(API_URL, json=payload, headers=HEADERS, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        
+        # Defensive parsing for various API formats
+        if "choices" in data and len(data["choices"]) > 0:
+            content = data["choices"][0].get("message", {}).get("content") or data["choices"][0].get("text")
+            return True, content
+        elif "output" in data:
+            return True, data["output"]
+            
+        return False, "Empty response from model API."
+        
+    except Exception as e:
+        logger.error(f"Inference Error: {e}")
+        return False, str(e)
 
-def parse_tool_call(text: str):
-    """
-    If assistant returns a pure JSON object describing a tool call, return parsed dict.
-    Example expected:
-    {"tool":"get_project_info","input":{"project":"frozen_music"}}
-    """
-    # Try to locate a JSON object; prefer whole content JSON.
-    text = text.strip()
-    # Quick heuristic: if text starts with { and contains "tool"
-    if text.startswith("{") and '"tool"' in text:
-        try:
-            obj = json.loads(text)
-            if isinstance(obj, dict) and "tool" in obj:
-                return obj
-        except Exception:
-            pass
-    # fallback regex to extract a block that looks like a JSON with "tool"
-    m = TOOL_JSON_RE.search(text)
-    if m:
-        try:
-            obj = json.loads(m.group(1))
-            if "tool" in obj:
-                return obj
-        except Exception:
-            pass
+def parse_tool_call(text):
+    """Extracts JSON tool calls from text."""
+    try:
+        # Look for { ... } structure
+        match = re.search(r'(\{.*"tool".*\})', text, re.DOTALL)
+        if match:
+            clean_json = match.group(1).replace("'", '"') # Basic cleanup
+            data = json.loads(clean_json)
+            if "tool" in data:
+                return data
+    except:
+        pass
     return None
 
-# ----------------------------
-# Routes: UI + meta + chat
-# ----------------------------
+# -----------------------------------------------------------------------------
+# 7. ROUTES
+# -----------------------------------------------------------------------------
+
 @app.route("/", methods=["GET"])
-def ui_home():
-    # improved UI: shows project quick-buttons and tool-aware bubbles
-    html = """
-<!doctype html>
-<html>
+def index():
+    """Serves the Premium UI."""
+    return render_template_string(HTML_TEMPLATE)
+
+@app.route("/api/chat", methods=["POST"])
+def chat_endpoint():
+    data = request.json or {}
+    user_msg = data.get("message")
+    user_id = data.get("user_id", "guest")
+    
+    if not user_msg:
+        return jsonify({"error": "No message provided"}), 400
+        
+    history = get_session_history(user_id)
+    history.append({"role": "user", "content": user_msg})
+    
+    events = [] # Log events to send to UI
+    
+    # --- Tool Execution Loop ---
+    MAX_TURNS = 3
+    final_response = ""
+    
+    for _ in range(MAX_TURNS):
+        success, response_text = call_inference_engine(history)
+        
+        if not success:
+            return jsonify({"error": "AI Service unavailable", "details": response_text}), 503
+            
+        # Check for Tool Call
+        tool_req = parse_tool_call(response_text)
+        
+        if tool_req:
+            t_name = tool_req.get("tool")
+            t_query = tool_req.get("query")
+            
+            # Log for UI
+            events.append({"type": "tool_use", "name": t_name, "status": "executing"})
+            
+            # Execute
+            if t_name in TOOLS:
+                t_result = TOOLS[t_name](t_query)
+            else:
+                t_result = json.dumps({"error": "Tool not found"})
+                
+            # Feed back to history
+            history.append({"role": "assistant", "content": response_text})
+            history.append({"role": "system", "content": f"[TOOL_OUTPUT]: {t_result}"})
+            
+            # Continue loop to let AI generate final answer
+            continue
+            
+        else:
+            # Final Answer
+            history.append({"role": "assistant", "content": response_text})
+            final_response = response_text
+            break
+            
+    return jsonify({
+        "response": final_response,
+        "events": events
+    })
+
+@app.route("/api/reset", methods=["POST"])
+def reset_session():
+    data = request.json or {}
+    user_id = data.get("user_id", "guest")
+    if user_id in CHAT_SESSIONS:
+        del CHAT_SESSIONS[user_id]
+    return jsonify({"status": "cleared"})
+
+# -----------------------------------------------------------------------------
+# 8. PREMIUM FRONTEND (Embedded)
+# -----------------------------------------------------------------------------
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Kust Bots — Support (Tool-enabled)</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    :root{ --bg:#071033; --panel:#071a2b; --muted:#9fb0d6; --accent:#2563eb; --msg-user:#18314e; --msg-bot:#0b2a3c; --tool:#21412b; color-scheme:dark}
-    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial;background:linear-gradient(180deg,#020617 0%, #071033 100%);color:#e6eef8;height:100vh;display:flex;align-items:stretch}
-    .sidebar{width:360px;background:var(--panel);padding:18px;box-sizing:border-box;border-right:1px solid rgba(255,255,255,0.03);display:flex;flex-direction:column;gap:10px}
-    .brand{font-weight:700;font-size:18px}
-    .desc{color:var(--muted);font-size:13px}
-    .field{display:flex;flex-direction:column;gap:6px}
-    .input{padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
-    button{background:var(--accent);border:0;padding:10px 12px;border-radius:8px;color:white;cursor:pointer}
-    .main{flex:1;display:flex;flex-direction:column;padding:18px;box-sizing:border-box}
-    .top{display:flex;justify-content:space-between;align-items:center}
-    .chat{margin-top:14px;background:rgba(255,255,255,0.01);border-radius:10px;padding:14px;flex:1;overflow:auto}
-    .controls{display:flex;gap:10px;margin-top:12px}
-    .msg{max-width:70%;padding:10px 12px;border-radius:10px;margin:8px 0;display:inline-block}
-    .msg.user{background:var(--msg-user);margin-left:auto;text-align:right}
-    .msg.bot{background:var(--msg-bot);text-align:left}
-    .msg.tool{background:var(--tool);color:#e8ffe8;border-left:3px solid #5ec06a}
-    .small{font-size:12px;color:var(--muted)}
-    .projects{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
-    .pbtn{padding:6px 8px;border-radius:6px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.02);cursor:pointer}
-    .meta{color:var(--muted);font-size:13px}
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kust Bots | Support Portal</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #030712;
+            --panel: #0f172a;
+            --border: #1e293b;
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.2);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --user-bubble: #1e293b;
+            --bot-bubble: #1e3a8a;
+            --success: #10b981;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* --- Sidebar --- */
+        .sidebar {
+            width: 320px;
+            background: var(--panel);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem;
+            z-index: 10;
+        }
+        
+        .brand {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: -0.5px;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .brand-dot { width: 10px; height: 10px; background: var(--success); border-radius: 50%; box-shadow: 0 0 10px var(--success); }
+
+        .desc {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+            line-height: 1.5;
+        }
+
+        .quick-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .action-btn {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 0.85rem;
+            border-radius: 8px;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .action-btn:hover {
+            background: rgba(255,255,255,0.08);
+            color: var(--text-main);
+            border-color: var(--accent);
+        }
+
+        /* --- Main Chat Area --- */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: radial-gradient(circle at top right, #172033 0%, var(--bg) 40%);
+            position: relative;
+        }
+
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            scroll-behavior: smooth;
+        }
+        
+        .chat-container::-webkit-scrollbar { width: 6px; }
+        .chat-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        .msg {
+            max-width: 80%;
+            padding: 1rem 1.25rem;
+            border-radius: 12px;
+            line-height: 1.6;
+            font-size: 0.95rem;
+            animation: fadeUp 0.3s ease;
+        }
+
+        .msg.user {
+            align-self: flex-end;
+            background: var(--user-bubble);
+            border: 1px solid var(--border);
+            border-bottom-right-radius: 2px;
+        }
+
+        .msg.bot {
+            align-self: flex-start;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border);
+            border-left: 2px solid var(--accent);
+            border-bottom-left-radius: 2px;
+        }
+
+        .msg.tool {
+            align-self: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            background: rgba(0,0,0,0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            border: 1px dashed var(--border);
+            margin: 0.5rem 0;
+        }
+
+        /* --- Input Area --- */
+        .input-area {
+            padding: 1.5rem 2rem;
+            background: var(--bg);
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 1rem;
+        }
+
+        .input-box {
+            flex: 1;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 1rem;
+            transition: 0.2s;
+        }
+
+        .input-box:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .send-btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 0 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .send-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .send-btn:disabled { background: var(--border); cursor: not-allowed; }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            .sidebar { width: 100%; height: auto; padding: 1rem; display: none; } /* Hidden on mobile by default for simplicity */
+            .main { height: 100vh; }
+            .input-area { padding: 1rem; }
+            .msg { max-width: 90%; }
+        }
+        
+        /* Markdown-like styling inside messages */
+        .msg strong { color: #fff; font-weight: 700; }
+        .msg code { background: #000; padding: 2px 4px; border-radius: 4px; font-family: 'JetBrains Mono'; font-size: 0.85em; }
+    </style>
 </head>
 <body>
-  <div class="sidebar">
-    <div class="brand">Kust Bots — Support</div>
-    <div class="desc">Direct engineering-grade support. The assistant can request tool data about projects & commands automatically. Use the UI to chat, or click quick actions.</div>
-    <div class="field">
-      <label class="small">User ID</label>
-      <input id="user" class="input" value="test_user" />
-    </div>
-    <div class="field">
-      <label class="small">Quick actions</label>
-      <div style="display:flex;gap:8px">
-        <button id="btn-projects" class="pbtn">List Projects</button>
-        <button id="btn-frozen" class="pbtn">Frozen Music</button>
-        <button id="btn-commands" class="pbtn">Commands (frozen_music)</button>
-      </div>
-      <div class="projects" id="projects-div"></div>
-    </div>
-    <div style="margin-top:auto">
-      <div class="meta">Model: <span id="model-name">loading...</span></div>
-      <div class="meta">Env: <span id="env">checking...</span></div>
-      <div style="height:8px"></div>
-      <button id="reset">Reset Session</button>
-    </div>
-  </div>
 
-  <div class="main">
-    <div class="top">
-      <div style="font-weight:700">Live Support Console</div>
-      <div class="small" id="status">idle</div>
+    <div class="sidebar">
+        <div class="brand">
+            <div class="brand-dot"></div>
+            KUST BOTS
+        </div>
+        <div class="desc">
+            Official engineering-grade support system.
+        </div>
+        
+        <div class="desc" style="margin-bottom: 0.5rem; font-weight: 600; color: #fff;">QUICK ACTIONS</div>
+        <div class="quick-actions">
+            <button class="action-btn" onclick="ask('What are the plans for Kustify?')">Hosting Plans</button>
+            <button class="action-btn" onclick="ask('How does Frozen Music Bot work?')">Music Bot Info</button>
+            <button class="action-btn" onclick="ask('Tell me about Stake Chat Farmer.')">Chat Farmer</button>
+            <button class="action-btn" onclick="ask('I need a custom bot.')">Custom Services</button>
+        </div>
+
+        <div style="margin-top: auto; font-size: 0.75rem; color: var(--text-muted);">
+            <p>Session ID: <span id="session-id">...</span></p>
+            <button onclick="resetSession()" style="background:none; border:none; color: #ef4444; cursor:pointer; margin-top:10px; font-size:0.75rem;">[ Reset Session ]</button>
+        </div>
     </div>
 
-    <div class="chat" id="chat"></div>
-
-    <div class="controls">
-      <input id="msg" class="input" placeholder="Ask about bots, paste logs, or press quick actions." />
-      <button id="send">Send</button>
+    <div class="main">
+        <div class="chat-container" id="chat">
+            <div class="msg bot">
+                <strong>System Online.</strong><br>
+                Welcome to Kust Bots Official Support.<br>
+                I can assist with Kustify, Music Bots, Stake Tools, and Billing. How can I help?
+            </div>
+        </div>
+        
+        <div class="input-area">
+            <input type="text" id="input" class="input-box" placeholder="Type your question here..." autocomplete="off">
+            <button id="send-btn" class="send-btn">SEND</button>
+        </div>
     </div>
-    <div style="margin-top:8px"><span class="small">Tip: The assistant may respond with a tool request. The UI will show the tool output inline.</span></div>
-  </div>
 
-<script>
-async function meta(){
-  const res = await fetch('/meta'); const j = await res.json();
-  document.getElementById('model-name').innerText = j.model || 'unknown';
-  document.getElementById('env').innerText = j.ok ? 'ok' : 'missing';
-}
-meta();
+    <script>
+        const userId = 'user_' + Math.random().toString(36).substr(2, 9);
+        document.getElementById('session-id').innerText = userId;
+        
+        const chat = document.getElementById('chat');
+        const input = document.getElementById('input');
+        const btn = document.getElementById('send-btn');
 
-function appendBubble(text, cls='bot'){
-  const el = document.getElementById('chat');
-  const d = document.createElement('div');
-  d.className = 'msg ' + (cls==='user'?'user': (cls==='tool'?'tool':'bot'));
-  d.innerText = text;
-  el.appendChild(d); el.scrollTop = el.scrollHeight;
-}
-
-async function sendMessage(user, text){
-  appendBubble(text, 'user');
-  document.getElementById('status').innerText = 'sending...';
-  try {
-    const res = await fetch('/chat_tool', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({user, message: text})});
-    const j = await res.json();
-    if(j.error){ appendBubble('Error: ' + (j.details || j.error)); }
-    else {
-      // j may include tool events; server returns final 'response' and optional 'events' array for tool outputs
-      if(j.events && Array.isArray(j.events)){
-        for(const ev of j.events){
-          if(ev.type==='tool_output') appendBubble('[Tool] ' + ev.data, 'tool');
-          if(ev.type==='assistant_partial') appendBubble(ev.data, 'bot');
+        function scrollToBottom() {
+            chat.scrollTop = chat.scrollHeight;
         }
-      }
-      if(j.response) appendBubble(j.response, 'bot');
-    }
-  } catch(e){
-    appendBubble('Network error: ' + e);
-  } finally {
-    document.getElementById('status').innerText = 'idle';
-  }
-}
 
-document.getElementById('send').addEventListener('click', ()=>{
-  const u = document.getElementById('user').value.trim(); const m = document.getElementById('msg').value.trim();
-  if(!u || !m) return alert('enter user and message');
-  document.getElementById('msg').value='';
-  sendMessage(u, m);
-});
-document.getElementById('msg').addEventListener('keydown', (e)=>{ if(e.key==='Enter') document.getElementById('send').click(); });
-document.getElementById('reset').addEventListener('click', async ()=>{
-  const u = document.getElementById('user').value.trim(); if(!u) return alert('enter user');
-  await fetch('/reset', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({user:u})});
-  document.getElementById('chat').innerHTML='';
-  appendBubble('Session reset', 'bot');
-});
+        function appendMessage(text, type) {
+            const div = document.createElement('div');
+            div.className = `msg ${type}`;
+            // Simple markdown-ish rendering
+            let html = text.replace(/\\n/g, '<br>')
+                           .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>'); 
+            div.innerHTML = html;
+            chat.appendChild(div);
+            scrollToBottom();
+        }
+        
+        function appendTool(text) {
+            const div = document.createElement('div');
+            div.className = 'msg tool';
+            div.innerHTML = `<span style="color:#10b981">⚡ SYSTEM:</span> ${text}`;
+            chat.appendChild(div);
+            scrollToBottom();
+        }
 
-document.getElementById('btn-projects').addEventListener('click', ()=> {
-  const u = document.getElementById('user').value.trim(); sendMessage(u, "Please list all projects.");
-});
-document.getElementById('btn-frozen').addEventListener('click', ()=> {
-  const u = document.getElementById('user').value.trim(); sendMessage(u, "Tell me about Frozen Music bot and how to use it.");
-});
-document.getElementById('btn-commands').addEventListener('click', ()=> {
-  const u = document.getElementById('user').value.trim(); sendMessage(u, "Show me available commands for frozen_music.");
-});
-</script>
+        async function ask(question) {
+            if(!question) return;
+            
+            appendMessage(question, 'user');
+            input.value = '';
+            input.disabled = true;
+            btn.disabled = true;
+            btn.innerText = '...';
+
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: question, user_id: userId })
+                });
+                
+                const data = await res.json();
+                
+                if (data.events) {
+                    data.events.forEach(e => {
+                        if(e.type === 'tool_use') {
+                            appendTool(`Accessing Data: ${e.name}...`);
+                        }
+                    });
+                }
+                
+                if (data.error) {
+                    appendMessage(`Error: ${data.details || data.error}`, 'bot');
+                } else {
+                    appendMessage(data.response, 'bot');
+                }
+                
+            } catch (e) {
+                appendMessage("Connection error. Please try again.", 'bot');
+            }
+
+            input.disabled = false;
+            btn.disabled = false;
+            btn.innerText = 'SEND';
+            input.focus();
+        }
+
+        async function resetSession() {
+            await fetch('/api/reset', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({user_id: userId})
+            });
+            chat.innerHTML = '<div class="msg bot">Session Reset. System Ready.</div>';
+        }
+
+        btn.addEventListener('click', () => ask(input.value));
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') ask(input.value);
+        });
+    </script>
 </body>
 </html>
 """
-    return render_template_string(html)
 
-@app.route("/meta", methods=["GET"])
-def meta():
-    ok = bool(INFERENCE_KEY and INFERENCE_MODEL_ID and BASE_URL)
-    return jsonify({"ok": ok, "model": INFERENCE_MODEL_ID or "unknown", "api_url": API_URL}), 200
-
-@app.route("/reset", methods=["POST"])
-def reset():
-    data = request.json or {}
-    user = data.get("user")
-    if not user:
-        return jsonify({"error": "missing user"}), 400
-    CHAT_SESSIONS.pop(user, None)
-    return jsonify({"ok": True}), 200
-
-# ----------------------------
-# Chat endpoint with tool-execution loop
-# ----------------------------
-@app.route("/chat_tool", methods=["POST"])
-def chat_tool():
-    """
-    Expects JSON { "user": "<id>", "message": "..." }
-    Returns JSON:
-    {
-      "response": "final assistant text",
-      "events": [ {"type":"tool_output","data":"..."}, ... ]
-    }
-    """
-    payload = request.json or {}
-    user = payload.get("user")
-    message = payload.get("message")
-    if not user or not message:
-        return jsonify({"error":"missing user or message"}), 400
-
-    ensure_session(user)
-    # append user message
-    CHAT_SESSIONS[user].append({"role":"user", "content": message})
-
-    events = []  # to send back tool outputs for UI display
-
-    # We'll loop: call model, if it returns a tool-call JSON, execute tool and append tool output as system message and call again.
-    MAX_ITER = 6
-    for iteration in range(MAX_ITER):
-        ok, assistant_content, raw = call_inference(CHAT_SESSIONS[user], timeout=60)
-        if not ok:
-            logger.warning("Inference failed: %s", assistant_content)
-            # append assistant error to history so model sees it next time and we can retry later
-            CHAT_SESSIONS[user].append({"role":"assistant", "content": f"[error] {assistant_content}"})
-            return jsonify({"error":"inference_failed","details":assistant_content}), 502
-
-        # Detect tool call JSON
-        tool_req = parse_tool_call(assistant_content)
-        if tool_req:
-            # Append the assistant's tool call message into history (so conversation has record)
-            CHAT_SESSIONS[user].append({"role":"assistant", "content": assistant_content})
-            tool_name = tool_req.get("tool")
-            tool_input = tool_req.get("input", {}) if isinstance(tool_req.get("input", {}), dict) else {}
-            logger.info("Tool requested: %s (input=%s)", tool_name, tool_input)
-            tool_func = TOOLS.get(tool_name)
-            if not tool_func:
-                tool_output = json.dumps({"error": f"tool '{tool_name}' not found"})
-            else:
-                try:
-                    tool_output = tool_func(tool_input)
-                except Exception as e:
-                    logger.exception("tool execution error")
-                    tool_output = json.dumps({"error": str(e)})
-            # Append tool output as a system message so the model can consume it in the next turn
-            tool_system_msg = {"role":"system", "content": f"[TOOL_OUTPUT] {tool_output}"}
-            CHAT_SESSIONS[user].append(tool_system_msg)
-            # Add an event for UI to display the tool output immediately
-            events.append({"type":"tool_output", "data": tool_output})
-            # continue loop to call model again with new context
-            time.sleep(0.2)
-            continue
-        else:
-            # No tool requested => final assistant reply. Append and return.
-            CHAT_SESSIONS[user].append({"role":"assistant", "content": assistant_content})
-            return jsonify({"response": assistant_content, "events": events}), 200
-
-    # if reached here, too many iterations
-    return jsonify({"error":"tool_loop_exceeded"}), 500
-
-# ----------------------------
-# Simple helper route to show raw KB (admin/debug)
-# ----------------------------
-@app.route("/_kb", methods=["GET"])
-def show_kb():
-    return jsonify(KB), 200
-
-# ----------------------------
-# Run (dev) — Heroku should use gunicorn; this allows local run
-# ----------------------------
+# -----------------------------------------------------------------------------
+# 9. ENTRY POINT
+# -----------------------------------------------------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    logger.info("Starting Kust Support (tools) on port %d", port)
+    logger.info(f"System Online. Listening on port {port}")
     app.run(host="0.0.0.0", port=port)
