@@ -140,6 +140,48 @@ KB = {
         }
     },
 
+    # ----------------------------
+    # Added: Detailed information about the owner / primary developer ("me")
+    # ----------------------------
+    "about_me": {
+        "preferred_name": "Kust",
+        "primary_telegram": "@KustDev",
+        "other_telegram_handles": ["@KustBots", "@KustBotsNetwork", "@kustbotssupport", "@KustXoffical"],
+        "brand": {
+            "public_name": "Kust Bots",
+            "github_primary": "kustbots",
+            "github_alternate": "XyloBots"
+        },
+        "website": "https://frozenmusic.vercel.app/",
+        "main_system": {
+            "cpu": "Intel i5-12400F",
+            "gpu": "RTX 3080 Ti",
+            "notes": "Primary development workstation"
+        },
+        "infrastructure_projects": [
+            "Frozen Music (VC bot) running distributed playback nodes",
+            "Raspberry Pi cluster (35 nodes) used for backend experiments",
+            "Custom distributed downloader API using Flask + yt-dlp",
+            "Cloudflare Workers for command routing and lightweight APIs",
+            "YouTube Audio/Video Downloader API (minimal resource usage design)"
+        ],
+        "developer_skills": [
+            "Full-stack development (frontend, backend, DB, hosting)",
+            "Telegram bot development (Pyrogram/pytgcalls)",
+            "Flask, Cloudflare Workers, Docker, Linux",
+            "Distributed systems and caching",
+            "AI scraping/monitoring pipelines (custom LLM/data collection)",
+            "Unreal Engine 5 (working on a Valorant-style mobile shooter)",
+            "Payment integration handling (PayPal sandbox / manual UPI flows)"
+        ],
+        "notable_activity": [
+            "Maintains a Telegram-based database with large-scale media crawling (~150M files historically referenced)",
+            "Runs multiple GPUs for ML and scraping tasks",
+            "Manually processes payments for Indian clients; PayPal sandbox 'frozen-bots' created for testing"
+        ],
+        "work_style": "Long-term focused; prefers owning platform and building direct audience rather than relying on third-party platforms."
+    },
+
     "compliance": {
         "official": ["@kustbots", "@kustbotschat", "@KustDev"],
         "warn": (
@@ -205,6 +247,10 @@ def search_kb(query):
     if "official" in query or "fake" in query or "real" in query:
         results.append(str(KB['compliance']))
     
+    # Support queries about the owner / developer details
+    if "kust" in query or "owner" in query or "about me" in query or "about kust" in query:
+        results.append(json.dumps(KB.get("about_me", "No owner data available")))
+
     if not results:
         return "No specific record found. Answer based on general Kust knowledge."
     return "\n".join(results[:3])
