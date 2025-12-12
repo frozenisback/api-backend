@@ -412,6 +412,7 @@ def call_inference_stream(messages):
             is_collecting_tool = False
             tool_check_buffer = "" 
             check_completed = False
+            brace_count = 0
 
             for line in r.iter_lines():
                 if not line: continue
@@ -429,9 +430,18 @@ def call_inference_stream(messages):
                         if delta:
                             if not check_completed:
                                 tool_check_buffer += delta
-                                stripped = tool_check_buffer.strip()
-                                # Check if response starts with JSON object
-                                if stripped:
+                                
+                                # Count braces to determine if we have a complete JSON
+                                for char in tool_check_buffer:
+                                    if char == "{":
+                                        brace_count += 1
+                                    elif char == "}":
+                                        brace_count -= 1
+                                
+                                # Check if we have a complete JSON object
+                                if brace_count <= 0 and "{" in tool_check_buffer:
+                                    # We have a complete JSON
+                                    stripped = tool_check_buffer.strip()
                                     if stripped.startswith("{"):
                                         is_collecting_tool = True
                                         tool_buffer = tool_check_buffer
@@ -439,7 +449,8 @@ def call_inference_stream(messages):
                                         is_collecting_tool = False
                                         yield f"data: {json.dumps({'type': 'token', 'content': tool_check_buffer})}\n\n"
                                     check_completed = True
-                                elif len(tool_check_buffer) > 50:
+                                elif len(tool_check_buffer) > 200:
+                                    # Too long to be a tool call, treat as regular text
                                     is_collecting_tool = False
                                     yield f"data: {json.dumps({'type': 'token', 'content': tool_check_buffer})}\n\n"
                                     check_completed = True
