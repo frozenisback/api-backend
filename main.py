@@ -267,18 +267,53 @@ def search_kb(query):
     if any(term in query for term in broad_terms):
         summary = ["Here is an overview of all Kust Bots services:"]
         for key, data in KB["projects"].items():
-            summary.append(f"**{data['name']}**: {data.get('info') or 'See details via specific query.'}")
+            summary.append(f"**{data['display_name']}**: {data.get('description', 'See details via specific query.')}")
         return "\n\n".join(summary)
 
     # SPECIFIC SEARCH LOGIC
     results = []
     for key, data in KB["projects"].items():
-        blob = str(data).lower()
-        if query in key or query in data['name'].lower() or any(w in blob for w in query.split()):
-            results.append(f"{data['name']}: {json.dumps(data)}")
+        # Check if query matches project key or display name
+        if query in key or query in data.get('display_name', '').lower():
+            # Return formatted project information
+            project_info = f"**{data.get('display_name', 'Unknown Project')}**\n\n"
+            project_info += f"{data.get('description', 'No description available.')}\n\n"
+            
+            if 'features' in data:
+                project_info += "**Features:**\n"
+                for feature in data['features']:
+                    project_info += f"- {feature}\n"
+                project_info += "\n"
+                
+            if 'commands' in data:
+                project_info += "**Commands:**\n"
+                for command in data['commands']:
+                    project_info += f"- {command}\n"
+                project_info += "\n"
+                
+            if 'setup' in data:
+                project_info += "**Setup Steps:**\n"
+                for step in data['setup']:
+                    project_info += f"- {step}\n"
+                project_info += "\n"
+                
+            if 'plans' in data:
+                project_info += "**Pricing Plans:**\n"
+                for plan, details in data['plans'].items():
+                    project_info += f"- **{plan}**: {details}\n"
+                project_info += "\n"
+                
+            results.append(project_info)
     
+    # Check for compliance/official channel queries
     if "official" in query or "fake" in query or "real" in query:
-        results.append(str(KB['compliance']))
+        compliance_info = "**Official Kust Bots Information:**\n\n"
+        compliance_info += f"Official Channel: {KB['brand']['official_channel']}\n"
+        compliance_info += f"Official Support Group: {KB['brand']['official_support_group']}\n"
+        compliance_info += f"Owner: {KB['brand']['owner']}\n\n"
+        compliance_info += f"{KB['brand']['note']}\n\n"
+        compliance_info += f"**Warning:** {KB['compliance']['warn']}\n"
+        results.append(compliance_info)
     
     if not results:
         return "No specific record found. Answer based on general Kust knowledge."
@@ -323,7 +358,7 @@ def call_inference_stream(messages):
                         if delta:
                             if not check_completed:
                                 tool_check_buffer += delta
-                                stripped = tool_check_buffer.lstrip()
+                                stripped = tool_check_buffer.strip()
                                 # Check if response starts with JSON object
                                 if stripped:
                                     if stripped.startswith("{"):
