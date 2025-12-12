@@ -6,9 +6,9 @@ from flask import Flask, Response
 app = Flask(__name__)
 
 # -------------------------------
-# LOAD CREDS FROM HEROKU ENV
+# ENV LOADING
 # -------------------------------
-API_URL = os.getenv("INFERENCE_URL")  # e.g. https://xxx.inference.run
+API_URL = os.getenv("INFERENCE_URL")
 INFERENCE_KEY = os.getenv("INFERENCE_KEY")
 MODEL_NAME = os.getenv("INFERENCE_MODEL_ID")
 
@@ -17,11 +17,19 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
+
 # -------------------------------
+# SSE FORMATTER + LOGGING
+# -------------------------------
+def sse(msg):
+    print("SSE →", msg)  # prints to heroku logs
+    return f"data: {msg}\n\n"
 
 
+# -------------------------------
+# TEST FUNCTION WITH LOGGING
+# -------------------------------
 def test_prompt(token_len: int):
-    """Send a test request with detailed logging."""
     prompt = "word " * token_len
 
     payload = {
@@ -40,21 +48,22 @@ def test_prompt(token_len: int):
     try:
         r = requests.post(API_URL, json=payload, headers=HEADERS, timeout=12)
 
-        print("STATUS CODE:", r.status_code)
-        print("RESPONSE TEXT:", r.text)
+        print("STATUS:", r.status_code)
+        print("RESPONSE:", r.text)
 
-        # Successful HTTP but provider error inside?
         if r.status_code == 200:
             return True
 
         return False
 
     except Exception as e:
-        print("REQUEST EXCEPTION:", str(e))
+        print("REQUEST ERROR:", e)
         return False
 
 
-
+# -------------------------------
+# SSE ENDPOINT
+# -------------------------------
 @app.route("/api")
 def run_test():
     def stream():
@@ -64,9 +73,7 @@ def run_test():
         last_success = 0
         last_fail = None
 
-        # ---------------------------
-        # PHASE 1: COARSE CHECK
-        # ---------------------------
+        # COARSE TEST
         for size in test_steps:
             yield sse(f"⏳ Testing {size} tokens...")
             ok = test_prompt(size)
@@ -82,16 +89,12 @@ def run_test():
             time.sleep(0.1)
 
         if last_fail is None:
-            yield sse("⚠ No failure detected up to 800 tokens.")
-            yield sse("📌 Increase test range manually if needed.")
+            yield sse("⚠ No failure up to 800. Increase test range manually.")
             return
 
-        # ------------------------------------
-        # PHASE 2: BINARY SEARCH FOR HARD LIMIT
-        # ------------------------------------
+        # BINARY SEARCH
         low = last_success
         high = last_fail
-
         yield sse(f"🔍 Narrowing range from {low} → {high}...")
 
         while high - low > 5:
@@ -109,13 +112,14 @@ def run_test():
 
             time.sleep(0.1)
 
-        final_limit = low
-        yield sse(f"🎉 FINAL MAX INPUT TOKEN LIMIT: {final_limit}")
+        yield sse(f"🎉 FINAL MAX INPUT TOKEN LIMIT: {low}")
 
     return Response(stream(), mimetype="text/event-stream")
 
 
+# -------------------------------
+# LOCAL DEV ONLY (Heroku won't use this)
+# -------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
-
