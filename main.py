@@ -8,6 +8,9 @@ app = Flask(__name__)
 # -------------------------------
 # ENV LOADING
 # -------------------------------
+INFERENCE_KEY = os.getenv("INFERENCE_KEY")
+MODEL_NAME = os.getenv("INFERENCE_MODEL_ID")
+
 BASE_URL = os.getenv("INFERENCE_URL")
 API_URL = f"{BASE_URL}/v1/chat/completions"
 
@@ -15,11 +18,6 @@ HEADERS = {
     "Authorization": f"Bearer {INFERENCE_KEY}",
     "Content-Type": "application/json"
 }
-
-INFERENCE_KEY = os.getenv("INFERENCE_KEY")
-MODEL_NAME = os.getenv("INFERENCE_MODEL_ID")
-
-
 
 # -------------------------------
 # SSE FORMATTER + LOGGING
