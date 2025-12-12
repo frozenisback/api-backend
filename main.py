@@ -58,35 +58,15 @@ KB = {
                 "Multi-account farming at scale",
                 "24/7 autonomous operation"
             ],
-            "setup_new_user": [
-                "Go to @kustchatbot and click 'Get Your Trial Now' button",
-                "Enter your Stake username (case-sensitive)",
-                "Download the unpacked extension provided by the bot",
-                "Unzip the extension file",
-                "Open Chrome with Developer Tools enabled",
-                "Navigate to stake.com or any Stake mirror (e.g., https://stake.com/casino/games/mines)",
-                "Go to Chrome extensions and click on our extension to enable it",
-                "Refresh the page to see the chat farmer popup on the left side",
-                "Watch the setup video provided by the bot (in Hindi) for detailed guidance"
-            ],
-            "setup_existing_user": [
-                "Go to @kustchatbot and send /start",
-                "If your trial has expired, click 'Buy Subscription' button",
-                "Enter your Stake username (case-sensitive)",
-                "Choose payment method: UPI (manual processing) or Crypto (automated via ValoXaPay)",
-                "After payment, enable the extension in Chrome",
-                "Navigate to stake.com and look for the 'Enable AI' button",
-                "Click the 'Enable AI' button to start the chat farmer"
-            ],
-            "payment_methods": [
-                "UPI: Processed manually",
-                "Crypto: Processed automatically via ValoXaPay"
+            "setup": [
+                "Start bot @kustchatbot",
+                "Link account",
+                "Configure mood/tone",
+                "Start farming mode"
             ],
             "support_notes": [
                 "Ask for server/country and number of accounts",
-                "Common fix: Reset memory profile or timing windows",
-                "Ensure your Stake username is entered correctly (case-sensitive)",
-                "Make sure Developer Tools are enabled in Chrome before loading the extension"
+                "Common fix: Reset memory profile or timing windows"
             ]
         },
         "stake_code_claimer": {
@@ -311,22 +291,10 @@ def search_kb(query):
                     project_info += f"- {command}\n"
                 project_info += "\n"
                 
-            if 'setup_new_user' in data:
-                project_info += "**Setup for New Users:**\n"
-                for step in data['setup_new_user']:
+            if 'setup' in data:
+                project_info += "**Setup Steps:**\n"
+                for step in data['setup']:
                     project_info += f"- {step}\n"
-                project_info += "\n"
-                
-            if 'setup_existing_user' in data:
-                project_info += "**Setup for Existing Users:**\n"
-                for step in data['setup_existing_user']:
-                    project_info += f"- {step}\n"
-                project_info += "\n"
-                
-            if 'payment_methods' in data:
-                project_info += "**Payment Methods:**\n"
-                for method in data['payment_methods']:
-                    project_info += f"- {method}\n"
                 project_info += "\n"
                 
             if 'plans' in data:
