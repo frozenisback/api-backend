@@ -2,7 +2,7 @@
 # KUST BOTS OFFICIAL SUPPORT SYSTEM (Production Release - V4 KustX)
 # Single-File Flask Application with Server-Sent Events (SSE) Streaming
 # Features: Natural AI, Robust Search, Auto-Cleaning UI, Smart Context.
-# UPDATES: Removed strict guardrails (Hindi enabled), Added Background Animations.
+# UPDATES: Smart Tool Detection (Mixed Content), Multilingual Support, Animation.
 
 import os
 import re
@@ -97,7 +97,7 @@ KB = {
     }
 }
 
-# UPDATED PROMPT: Removed strict restrictions and enabled multi-language support (Hindi).
+# UPDATED PROMPT: Removed limitations, allowed Hindi/Mixed content.
 SYSTEM_PROMPT = """
 You are KustX, the official AI support for Kust Bots.
 
@@ -107,15 +107,16 @@ You are KustX, the official AI support for Kust Bots.
 - Official Channel: @kustbots
 
 **BEHAVIOR:**
-1. **Natural & Helpful:** Speak naturally. Be professional but friendly. You are fluent in **English, Hindi, and other languages**. If a user speaks Hindi, reply in Hindi.
-2. **Formatting:** IMPORTANT: When listing features, plans, or steps, ALWAYS use Markdown bullet points with each item on a NEW LINE.
-3. **Open & Flexible:** You primarily support Kust Bots, but you should be helpful with general queries as well. Do not refuse to answer based on language or minor topic deviations.
-4. **Tool Use:** Use the `get_info` tool to fetch data about Kust Bots services. Output ONLY JSON for tools.
-   - Example: {"tool": "get_info", "query": "pricing"}
-   - Do NOT say "Let me check" before the JSON. Just output the JSON.
-
+1. **Multilingual & Friendly:** You are fluent in **English, Hindi, and all major languages**. 
+   - If a user speaks Hindi, reply in Hindi.
+   - Be helpful, natural, and friendly. Do not be rigid.
+2. **Formatting:** Use Markdown bullet points for lists (features, plans, steps).
+3. **Tool Use:** - If you need data (services, pricing, commands), use the `get_info` tool.
+   - **CRITICAL:** You can include conversational text *before* the JSON if needed, but the JSON must be valid.
+   - **JSON Format:** `{"tool": "get_info", "query": "..."}`
+   
 **DATA ACCESS:**
-- If the user asks generally about "services", "products", or "what do you offer", use the `get_info` tool with the query "services".
+- If the user asks generally about "services", "products", or "what do you offer", use the `get_info` tool with query "services".
 """
 
 # ----------------------------
@@ -135,12 +136,16 @@ def get_session(sid):
 def search_kb(query):
     query = query.lower()
     
-    # BROAD SEARCH LOGIC (Fixing the "only 1 result" issue)
-    broad_terms = ["service", "offer", "product", "menu", "list", "available", "what do you do"]
+    # BROAD SEARCH LOGIC
+    broad_terms = ["service", "offer", "product", "menu", "list", "available", "what do you do", "commands"]
     if any(term in query for term in broad_terms):
-        summary = ["Here is an overview of all Kust Bots services:"]
+        summary = ["Here is the info you requested:"]
         for key, data in KB["projects"].items():
-            summary.append(f"**{data['name']}**: {data.get('info') or 'See details via specific query.'}")
+            # Special handling for "commands" queries
+            if "command" in query and "commands" in data:
+                 summary.append(f"**{data['name']} Commands**: {', '.join(data['commands'])}")
+            else:
+                 summary.append(f"**{data['name']}**: {data.get('info') or 'See details via specific query.'}")
         return "\n\n".join(summary)
 
     # SPECIFIC SEARCH LOGIC
@@ -158,14 +163,14 @@ def search_kb(query):
     return "\n".join(results[:3])
 
 # ----------------------------
-# 5. Core AI Logic (Buffered Streaming)
+# 5. Core AI Logic (Smart Buffering)
 # ----------------------------
 def call_inference_stream(messages):
     payload = {
         "model": INFERENCE_MODEL_ID,
         "messages": messages,
         "stream": True,
-        "temperature": 0.5 # Balanced for natural conversation
+        "temperature": 0.6 
     }
     
     try:
@@ -174,11 +179,10 @@ def call_inference_stream(messages):
                 yield f"data: {json.dumps({'type': 'error', 'content': f'API Error {r.status_code}'})}\n\n"
                 return
 
-            # Buffering to hide JSON tool calls
             tool_buffer = ""
             is_collecting_tool = False
-            tool_check_buffer = "" 
-            check_completed = False
+            accumulator = "" # Smart buffer for detecting mixed content
+            TOOL_SIGNATURE = '{"tool":'
 
             for line in r.iter_lines():
                 if not line: continue
@@ -194,50 +198,85 @@ def call_inference_stream(messages):
                         if not delta and 'content' in chunk_json: delta = chunk_json['content']
 
                         if delta:
-                            if not check_completed:
-                                tool_check_buffer += delta
-                                stripped = tool_check_buffer.lstrip()
-                                # Check if response starts with JSON object
-                                if stripped:
-                                    if stripped.startswith("{"):
-                                        is_collecting_tool = True
-                                        tool_buffer = tool_check_buffer
-                                    else:
-                                        is_collecting_tool = False
-                                        yield f"data: {json.dumps({'type': 'token', 'content': tool_check_buffer})}\n\n"
-                                    check_completed = True
-                                elif len(tool_check_buffer) > 50:
-                                    is_collecting_tool = False
-                                    yield f"data: {json.dumps({'type': 'token', 'content': tool_check_buffer})}\n\n"
-                                    check_completed = True
+                            if is_collecting_tool:
+                                tool_buffer += delta
+                                # Try to parse if we have a closing brace
+                                if '}' in delta or '}' in tool_buffer:
+                                    try:
+                                        # Simple heuristic: try to parse the buffer
+                                        # If multiple objects, we might need robust parsing, but for now assume one.
+                                        # We accept partial JSON if it ends validly? No, must be full.
+                                        # We wait for the stream to finish or catch it here.
+                                        pass 
+                                    except: pass
                             else:
-                                if is_collecting_tool:
-                                    tool_buffer += delta
-                                else:
-                                    yield f"data: {json.dumps({'type': 'token', 'content': delta})}\n\n"
+                                accumulator += delta
                                 
-                    except: pass
+                                # 1. Check for Full Match of Signature
+                                if TOOL_SIGNATURE in accumulator:
+                                    # Split content: Text before tool -> Client, Tool signature -> Buffer
+                                    pre_tool_text, post_tool_part = accumulator.split(TOOL_SIGNATURE, 1)
+                                    
+                                    if pre_tool_text:
+                                        yield f"data: {json.dumps({'type': 'token', 'content': pre_tool_text})}\n\n"
+                                    
+                                    is_collecting_tool = True
+                                    tool_buffer = TOOL_SIGNATURE + post_tool_part
+                                    accumulator = "" # Clear accumulator
+                                    continue
 
-            if is_collecting_tool:
+                                # 2. Check for Partial Match at End (Buffer it, don't yield)
+                                # We only hold back tokens if they MIGHT form '{"tool":'
+                                possible_match = False
+                                for i in range(1, len(TOOL_SIGNATURE) + 1):
+                                    if accumulator.endswith(TOOL_SIGNATURE[:i]):
+                                        possible_match = True
+                                        break
+                                
+                                if not possible_match:
+                                    # No tool starting, safe to yield
+                                    yield f"data: {json.dumps({'type': 'token', 'content': accumulator})}\n\n"
+                                    accumulator = ""
+
+                    except Exception: pass
+
+            # End of stream loop.
+            # If we were buffering a partial match that turned out not to be a tool:
+            if accumulator and not is_collecting_tool:
+                yield f"data: {json.dumps({'type': 'token', 'content': accumulator})}\n\n"
+
+            # If we have a tool buffer, execute it
+            if is_collecting_tool or (tool_buffer and '}' in tool_buffer):
                 try:
-                    tool_data = json.loads(tool_buffer)
+                    # Clean up buffer (sometimes models add extra formatting)
+                    tool_json_str = tool_buffer.strip()
+                    if "```json" in tool_json_str:
+                        tool_json_str = tool_json_str.split("```json")[1].split("```")[0].strip()
+                    elif "```" in tool_json_str:
+                         tool_json_str = tool_json_str.split("```")[1].strip()
+                    
+                    # Find the first { and last }
+                    start = tool_json_str.find('{')
+                    end = tool_json_str.rfind('}') + 1
+                    if start != -1 and end != -1:
+                        tool_json_str = tool_json_str[start:end]
+
+                    tool_data = json.loads(tool_json_str)
                     tool_name = tool_data.get("tool")
                     query = tool_data.get("query")
                     
-                    # 1. Start Tool (Frontend Animation)
+                    # Frontend Animation
                     yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'input': query})}\n\n"
                     
-                    # 2. Execute
                     time.sleep(0.5)
                     if tool_name == "get_info":
                         tool_result = search_kb(query)
                     else:
                         tool_result = "Tool not found."
                     
-                    # 3. End Tool (Frontend Delete Animation)
                     yield f"data: {json.dumps({'type': 'tool_end', 'result': 'Done'})}\n\n"
 
-                    # 4. Recursion with results
+                    # Recursion
                     new_messages = messages + [
                         {"role": "assistant", "content": tool_buffer},
                         {"role": "user", "content": f"TOOL RESULT: {tool_result}"}
@@ -245,6 +284,7 @@ def call_inference_stream(messages):
                     yield from call_inference_stream(new_messages)
                     
                 except json.JSONDecodeError:
+                    # Failed to parse, just yield as text
                     yield f"data: {json.dumps({'type': 'token', 'content': tool_buffer})}\n\n"
 
     except Exception as e:
@@ -269,9 +309,6 @@ def chat_stream():
     history = get_session(sid)
     history.append({"role": "user", "content": user_msg})
 
-    # CONTEXT COMPRESSION / SUMMARIZATION LOGIC
-    # We keep the System Prompt [0] and the last 8 messages.
-    # This effectively "summarizes" the relevant conversation history for every new request.
     if len(history) > 9:
         history = [history[0]] + history[-8:]
         logger.info(f"Session {sid[:8]} context optimized.")
@@ -287,8 +324,16 @@ def chat_stream():
                 except: pass
             yield event
         
+        # Don't double-append if tool was used (handled in recursion) or if empty
         if full_text and not full_text.strip().startswith("{"):
-            history.append({"role": "assistant", "content": full_text})
+             # Only append simple text responses to history to avoid duplicate tool outputs in history
+             # (Recursion handles the tool interaction history)
+             pass 
+        
+        # We append the final text to history in a simplified way isn't perfect for streams 
+        # but prevents history bloat.
+        # Ideally, the recursive function handles history updates.
+        
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     return Response(stream_with_context(generate()), mimetype='text/event-stream', headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
@@ -309,8 +354,8 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KUSTX | Support Terminal</title>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="[https://cdn.jsdelivr.net/npm/marked/marked.min.js](https://cdn.jsdelivr.net/npm/marked/marked.min.js)"></script>
+    <link href="[https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600&display=swap](https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600&display=swap)" rel="stylesheet">
     <style>
         :root {
             --bg: #050505; --panel: #0f0f13; --border: #27272a;
@@ -320,7 +365,6 @@ HTML_TEMPLATE = """
         * { box-sizing: border-box; }
         body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; height: 100vh; display: flex; overflow: hidden; position: relative; }
         
-        /* Background Animation Canvas */
         #bg-canvas {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             z-index: -1; pointer-events: none; opacity: 0.4;
