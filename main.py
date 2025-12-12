@@ -52,8 +52,18 @@ KB = {
             "name": "Stake Chat Farmer",
             "access": "@kustchatbot",
             "price": "Free 3-hour trial",
-            "features": "Autonomous chat generator. Not spam. Farms XP/Levels. 24/7. Multi-account.",
-            "setup": "Start bot -> Link account -> Set mood -> Start farming."
+            "features": [
+                "Autonomous chat generator (Not spam)",
+                "Farms XP/Levels 24/7",
+                "Multi-account support",
+                "Works on all Stake servers"
+            ],
+            "setup": [
+                "1. Start bot",
+                "2. Link account",
+                "3. Set mood",
+                "4. Start farming"
+            ]
         },
         "stake_code_claimer": {
             "name": "Stake Code Claimer",
@@ -62,7 +72,11 @@ KB = {
         "frozen_music": {
             "name": "Frozen Music Bot",
             "commands": ["/play", "/vplay", "/skip", "/couple", "/tmute"],
-            "info": "High-performance VC music bot. Distributed backend for stability."
+            "features": [
+                "High-performance VC music",
+                "Video playback support",
+                "Distributed backend for stability"
+            ]
         },
         "kustify_hosting": {
             "name": "Kustify Hosting",
