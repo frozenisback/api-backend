@@ -1,7 +1,7 @@
 # main.py
 # KUST BOTS OFFICIAL SUPPORT SYSTEM (Production Release - V4 KustX)
 # Single-File Flask Application with Server-Sent Events (SSE) Streaming
-# Features: Natural AI, Robust Search, Auto-Cleaning UI, Smart Context, Image Generation.
+# Features: Natural AI, Robust Search, Auto-Cleaning UI, Smart Context.
 
 import os
 import re
@@ -11,7 +11,6 @@ import uuid
 import logging
 import requests
 import sys
-import base64
 from flask import Flask, request, jsonify, Response, render_template_string, stream_with_context
 
 # ----------------------------
@@ -29,11 +28,6 @@ INFERENCE_KEY = os.getenv("INFERENCE_KEY", "")
 INFERENCE_MODEL_ID = os.getenv("INFERENCE_MODEL_ID", "")
 BASE_URL = os.getenv("INFERENCE_URL", "")
 
-# Image Generation API Configuration
-IMAGE_GEN_KEY = os.getenv("HEROKU_INFERENCE_PINK_KEY", "")
-IMAGE_GEN_MODEL_ID = os.getenv("HEROKU_INFERENCE_PINK_MODEL_ID", "")
-IMAGE_GEN_URL = os.getenv("HEROKU_INFERENCE_PINK_URL", "")
-
 # ----------------------------
 # Telegram Bot settings (user-provided token & channel)
 # ----------------------------
@@ -44,23 +38,13 @@ TELEGRAM_CHANNEL_ID = "-1002056355467"
 if not (INFERENCE_KEY and INFERENCE_MODEL_ID and BASE_URL):
     logger.error("⚠️ CRITICAL: Missing INFERENCE env vars.")
 
-if not (IMAGE_GEN_KEY and IMAGE_GEN_MODEL_ID and IMAGE_GEN_URL):
-    logger.warning("⚠️ Image generation API credentials not provided. Image generation will not be available.")
-
 API_URL = f"{BASE_URL.rstrip('/')}/v1/chat/completions"
-IMAGE_API_URL = f"{IMAGE_GEN_URL.rstrip('/')}/v1/images/generations"
 HEADERS = {
     "Authorization": f"Bearer {INFERENCE_KEY}",
     "Content-Type": "application/json"
 }
-IMAGE_HEADERS = {
-    "Authorization": f"Bearer {IMAGE_GEN_KEY}",
-    "Content-Type": "application/json"
-}
 
 logger.info(f"System Initialized. Model: {INFERENCE_MODEL_ID}")
-if IMAGE_GEN_MODEL_ID:
-    logger.info(f"Image Generation Model: {IMAGE_GEN_MODEL_ID}")
 
 # ----------------------------
 # 2. Knowledge Base (Business Logic)
@@ -233,7 +217,6 @@ You are KustX, the official AI support for Kust Bots.
 
 **DATA ACCESS:**
 - If the user asks generally about "services", "products", or "what do you offer", use the `get_info` tool with the query "services".
-- If the user asks to generate an image, create an image, draw something, or similar requests, use the `generate_image` tool with a descriptive prompt.
 """
 
 # ----------------------------
@@ -411,63 +394,8 @@ def search_kb(query):
     else:
         return f"Found '{name}' in KB but no displayable fields are present."
 
-def generate_image(prompt):
-    """
-    Generate an image using the Heroku image generation API.
-    
-    Args:
-        prompt (str): Text description of the image to generate
-        
-    Returns:
-        dict: Contains the image data or error information
-    """
-    if not (IMAGE_GEN_KEY and IMAGE_GEN_MODEL_ID and IMAGE_GEN_URL):
-        return {"error": "Image generation API credentials not configured"}
-    
-    # Validate prompt
-    if not prompt or not isinstance(prompt, str) or prompt.strip() == "":
-        return {"error": "Image prompt is required and cannot be empty"}
-    
-    try:
-        payload = {
-            "model": IMAGE_GEN_MODEL_ID,
-            "prompt": prompt.strip(),
-            "n": 1,  # Number of images to generate
-            "size": "1024x1024",  # Default size
-            "response_format": "b64_json"  # Request base64 encoded image
-        }
-        
-        logger.info(f"Generating image with prompt: {prompt.strip()}")
-        response = requests.post(IMAGE_API_URL, json=payload, headers=IMAGE_HEADERS, timeout=60)
-        
-        if response.status_code != 200:
-            logger.error(f"Image generation API error: {response.status_code} - {response.text}")
-            return {"error": f"Image generation failed with status {response.status_code}"}
-        
-        result = response.json()
-        
-        if "data" in result and len(result["data"]) > 0:
-            image_data = result["data"][0]
-            if "b64_json" in image_data:
-                return {
-                    "success": True,
-                    "image_data": image_data["b64_json"],
-                    "prompt": prompt.strip(),
-                    "revised_prompt": image_data.get("revised_prompt", prompt)
-                }
-            elif "url" in image_data:
-                return {
-                    "success": True,
-                    "image_url": image_data["url"],
-                    "prompt": prompt.strip(),
-                    "revised_prompt": image_data.get("revised_prompt", prompt)
-                }
-        
-        return {"error": "No image data returned from API"}
-        
-    except Exception as e:
-        logger.exception("Error generating image")
-        return {"error": f"Exception during image generation: {str(e)}"}
+
+
 
 def fetch_telegram_history(limit=None):
     """
@@ -650,9 +578,6 @@ def call_inference_stream(messages):
                             elif tool_name_lower in ("get_telegram_history", "get_telegram_updates", "tg_history", "telegram_history"):
                                 # fetch from Telegram using raw HTTP Bot API (best-effort)
                                 tool_result = fetch_telegram_history(limit=None)
-                            elif tool_name_lower in ("generate_image", "image_gen", "create_image", "draw"):
-                                # Generate image using the Heroku image generation API
-                                tool_result = generate_image(query)
                             else:
                                 tool_result = "Tool not found."
                         except Exception as e:
@@ -795,10 +720,6 @@ HTML_TEMPLATE = """
         .bubble ul { padding-left: 20px; margin: 10px 0; } .bubble li { margin-bottom: 6px; }
         .bubble code { background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
         
-        .generated-image { max-width: 100%; border-radius: 8px; margin-top: 10px; display: block; }
-        .image-container { text-align: center; margin: 10px 0; }
-        .image-prompt { font-size: 0.8rem; color: var(--text-dim); margin-top: 5px; font-style: italic; }
-        
         .input-area { padding: 20px; background: rgba(5,5,5,0.9); border-top: 1px solid var(--border); backdrop-filter: blur(10px); }
         .input-wrapper { max-width: 800px; margin: 0 auto; position: relative; display: flex; gap: 10px; }
         input { width: 100%; background: var(--panel); border: 1px solid var(--border); padding: 14px 18px; border-radius: 10px; color: white; font-family: inherit; font-size: 1rem; outline: none; transition: border-color 0.2s; }
@@ -824,13 +745,12 @@ HTML_TEMPLATE = """
             <button class="action-btn" onclick="ask('What is Kustify Hosting pricing?')">💰 Hosting Plans</button>
             <button class="action-btn" onclick="ask('How do I setup the Stake Chat Farmer?')">🤖 Stake Farmer Setup</button>
             <button class="action-btn" onclick="ask('Show me commands for Frozen Music Bot')">🎵 Music Bot Cmds</button>
-            <button class="action-btn" onclick="ask('Generate an image of a futuristic city')">🎨 Generate Image</button>
         </div>
         <div style="margin-top:auto; font-size:0.75rem; color:var(--text-dim);">Session ID: <span id="sess-id" style="font-family:monospace">...</span><br><a href="#" onclick="resetSession()" style="color:var(--accent)">Reset Session</a></div>
     </div>
     <div class="main">
         <div class="chat-container" id="chat">
-            <div class="message"><div class="avatar">🤖</div><div class="bubble"><p><strong>KustX Online.</strong></p><p>I am KustX. I can help with information about Kust Bots services and generate images. How can I assist you today?</p></div></div>
+            <div class="message"><div class="avatar">🤖</div><div class="bubble"><p><strong>KustX Online.</strong></p><p>I am KustX. How can I help you?</p></div></div>
         </div>
         <div class="input-area">
             <div class="input-wrapper"><input type="text" id="userInput" placeholder="Type your issue..." autocomplete="off"><button class="send" id="sendBtn" onclick="sendMessage()">SEND</button></div>
@@ -864,43 +784,6 @@ HTML_TEMPLATE = """
         chatEl.insertBefore(div, chatEl.lastElementChild); scrollToBottom(); 
         return div;
     }
-    function displayImage(imageData, prompt) {
-        // Create image container
-        const imageContainer = document.createElement('div');
-        imageContainer.className = 'image-container';
-        
-        // Create image element
-        const img = document.createElement('img');
-        img.className = 'generated-image';
-        
-        // If imageData is a base64 string
-        if (typeof imageData === 'string' && imageData.startsWith('data:image')) {
-            img.src = imageData;
-        } 
-        // If imageData is a base64 string without the data URI prefix
-        else if (typeof imageData === 'string' && imageData.length > 100) {
-            img.src = `data:image/png;base64,${imageData}`;
-        }
-        // If imageData is a URL
-        else if (typeof imageData === 'string') {
-            img.src = imageData;
-        }
-        
-        // Create prompt caption
-        const promptDiv = document.createElement('div');
-        promptDiv.className = 'image-prompt';
-        promptDiv.textContent = `Prompt: ${prompt}`;
-        
-        imageContainer.appendChild(img);
-        imageContainer.appendChild(promptDiv);
-        
-        // Find the last bot message and append the image
-        const lastBotMessage = document.querySelector('.message:not(.user):last-child .bubble');
-        if (lastBotMessage) {
-            lastBotMessage.appendChild(imageContainer);
-            scrollToBottom();
-        }
-    }
     function scrollToBottom() { chatEl.scrollTop = chatEl.scrollHeight; }
 
     async function sendMessage() {
@@ -908,7 +791,6 @@ HTML_TEMPLATE = """
         inputEl.value = ''; appendUserMsg(text); setBusy(true);
         const botBubble = createBotMsg();
         let currentText = ""; let isFirstToken = true;
-        let imageGenerated = false;
 
         try {
             const response = await fetch('/chat/stream', {
@@ -926,10 +808,6 @@ HTML_TEMPLATE = """
                             const data = JSON.parse(line.substring(6));
                             if (data.type === 'tool_start') {
                                 activeToolEl = createToolCard(data.input || data.tool);
-                                // Check if this is an image generation tool
-                                if (data.tool && data.tool.toLowerCase().includes('image')) {
-                                    imageGenerated = true;
-                                }
                             }
                             if (data.type === 'tool_end') {
                                 // keep a tiny grace so animations look smooth client-side as well
@@ -942,22 +820,6 @@ HTML_TEMPLATE = """
                             if (data.type === 'error') botBubble.innerHTML = `<span style="color:#ef4444">Error: ${data.content}</span>`;
                         } catch (e) {}
                     }
-                }
-            }
-            
-            // After streaming is complete, check if we need to extract and display an image
-            if (imageGenerated && currentText) {
-                try {
-                    // Try to extract image data from the response
-                    const imageMatch = currentText.match(/TOOL RESULT: ({.*})/);
-                    if (imageMatch) {
-                        const toolResult = JSON.parse(imageMatch[1]);
-                        if (toolResult.success && (toolResult.image_data || toolResult.image_url)) {
-                            displayImage(toolResult.image_data || toolResult.image_url, toolResult.prompt);
-                        }
-                    }
-                } catch (e) {
-                    console.error('Error displaying image:', e);
                 }
             }
         } catch (err) { botBubble.innerHTML = "Connection failed."; } finally { setBusy(false); }
