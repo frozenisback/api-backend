@@ -424,15 +424,20 @@ def generate_image(prompt):
     if not (IMAGE_GEN_KEY and IMAGE_GEN_MODEL_ID and IMAGE_GEN_URL):
         return {"error": "Image generation API credentials not configured"}
     
+    # Validate prompt
+    if not prompt or not isinstance(prompt, str) or prompt.strip() == "":
+        return {"error": "Image prompt is required and cannot be empty"}
+    
     try:
         payload = {
             "model": IMAGE_GEN_MODEL_ID,
-            "prompt": prompt,
+            "prompt": prompt.strip(),
             "n": 1,  # Number of images to generate
             "size": "1024x1024",  # Default size
             "response_format": "b64_json"  # Request base64 encoded image
         }
         
+        logger.info(f"Generating image with prompt: {prompt.strip()}")
         response = requests.post(IMAGE_API_URL, json=payload, headers=IMAGE_HEADERS, timeout=60)
         
         if response.status_code != 200:
@@ -447,14 +452,14 @@ def generate_image(prompt):
                 return {
                     "success": True,
                     "image_data": image_data["b64_json"],
-                    "prompt": prompt,
+                    "prompt": prompt.strip(),
                     "revised_prompt": image_data.get("revised_prompt", prompt)
                 }
             elif "url" in image_data:
                 return {
                     "success": True,
                     "image_url": image_data["url"],
-                    "prompt": prompt,
+                    "prompt": prompt.strip(),
                     "revised_prompt": image_data.get("revised_prompt", prompt)
                 }
         
