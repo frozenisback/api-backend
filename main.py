@@ -235,122 +235,143 @@ def get_session(sid):
 # ----------------------------
 def search_kb(query):
     """
-    AI-assisted KB search logic (deterministic, fast, no LLM calls):
+    Conservative, intent-aware KB search.
 
-    - Detects user intent (pricing, setup, commands, about, services)
-    - Scores projects based on keyword relevance
-    - Returns the MOST relevant structured data instead of dumping blobs
-    - Falls back cleanly when nothing matches
+    - Detects simple intent (pricing, setup, commands, about, services, general)
+    - Scores projects by keyword overlap (no content invention)
+    - RETURNS ONLY FIELDS PRESENT IN THE KB (no added or inferred text)
+    - Response is a JSON string with:
+        { matched_key, match_score, matched_fields, result: {...} }
     """
     if not query or not isinstance(query, str):
-        return "No query provided."
+        return json.dumps({"error": "No query provided."}, ensure_ascii=False)
 
     q = query.lower().strip()
     words = [w for w in re.split(r"\W+", q) if len(w) > 2]
 
-    # ----------------------------
-    # 1. Intent Detection
-    # ----------------------------
+    # Intent detection (strict)
     intent = "general"
-
     if any(k in q for k in ["price", "pricing", "cost", "plan", "plans"]):
         intent = "pricing"
     elif any(k in q for k in ["setup", "install", "how to", "configure", "steps"]):
         intent = "setup"
     elif any(k in q for k in ["command", "commands", "usage"]):
         intent = "commands"
-    elif any(k in q for k in ["who is", "about", "owner", "kust"]):
+    elif any(k in q for k in ["who is", "about", "owner", "kust", "who are you"]):
         intent = "about"
-    elif any(k in q for k in ["service", "offer", "product", "what do you do"]):
+    elif any(k in q for k in ["service", "offer", "product", "what do you do", "available"]):
         intent = "services"
 
-    # ----------------------------
-    # 2. ABOUT / OWNER
-    # ----------------------------
+    # ABOUT (explicit)
     if intent == "about":
-        return json.dumps(KB.get("about_me", {}), ensure_ascii=False)
-
-    # ----------------------------
-    # 3. SERVICE LIST (BROAD)
-    # ----------------------------
-    if intent == "services":
         return json.dumps({
-            "services": [
-                {"key": k, "name": v.get("name")}
-                for k, v in KB["projects"].items()
-            ]
+            "matched_key": "about_me",
+            "match_score": 100,
+            "matched_fields": list(KB.get("about_me", {}).keys()),
+            "result": KB.get("about_me", {})
         }, ensure_ascii=False)
 
-    # ----------------------------
-    # 4. Project Relevance Scoring (AI-ish part)
-    # ----------------------------
-    scored = []
+    # SERVICES (list available projects)
+    if intent == "services":
+        services = [{"key": k, "name": v.get("name")} for k, v in KB.get("projects", {}).items()]
+        return json.dumps({
+            "matched_key": "projects_overview",
+            "match_score": 100,
+            "matched_fields": ["projects"],
+            "result": {"services": services}
+        }, ensure_ascii=False)
 
-    for key, data in KB["projects"].items():
+    # Score projects conservatively (only token overlap against keys, names, and content)
+    scored = []
+    for key, data in KB.get("projects", {}).items():
         score = 0
         name = data.get("name", "").lower()
         blob = json.dumps(data).lower()
 
-        # keyword overlap
+        # token overlap scoring (weights favor key/name)
         for w in words:
             if w in key:
-                score += 5
+                score += 6
             if w in name:
                 score += 4
             if w in blob:
                 score += 1
 
-        # intent boosts
-        if intent == "pricing" and "plans" in data:
-            score += 10
+        # small boost if exact intent field exists
+        if intent == "pricing" and ("plans" in data or "price" in data or "pricing" in data):
+            score += 8
         if intent == "commands" and "commands" in data:
-            score += 8
+            score += 6
         if intent == "setup" and "setup" in data:
-            score += 8
+            score += 6
 
         if score > 0:
             scored.append((score, key, data))
 
+    # If no scored matches, try an exact key or exact name match as fallback
     if not scored:
-        return "No specific record found. Answer based on general Kust knowledge."
+        for key, data in KB.get("projects", {}).items():
+            if q == key or q == data.get("name", "").lower():
+                scored.append((10, key, data))
+                break
 
-    # pick best match
-    scored.sort(reverse=True, key=lambda x: x[0])
-    _, best_key, best_data = scored[0]
-
-    # ----------------------------
-    # 5. Intent-Specific Response Shaping
-    # ----------------------------
-    if intent == "pricing" and "plans" in best_data:
+    if not scored:
+        # nothing reliable found — return safe fallback (no hallucination)
         return json.dumps({
-            "name": best_data.get("name"),
-            "plans": best_data.get("plans"),
-            "info": best_data.get("info")
+            "matched_key": None,
+            "match_score": 0,
+            "matched_fields": [],
+            "result": "No specific record found in KB. Answer based on general Kust knowledge is disabled to avoid hallucination."
         }, ensure_ascii=False)
 
-    if intent == "commands" and "commands" in best_data:
+    # Pick best match
+    scored.sort(key=lambda x: x[0], reverse=True)
+    best_score, best_key, best_data = scored[0]
+
+    # Decide which fields to return based only on what's present in KB and the detected intent
+    allowed_fields = []
+    if intent == "pricing":
+        for f in ("plans", "price", "pricing"):
+            if f in best_data:
+                allowed_fields.append(f)
+    elif intent == "commands":
+        if "commands" in best_data:
+            allowed_fields.append("commands")
+    elif intent == "setup":
+        if "setup" in best_data:
+            allowed_fields.append("setup")
+        if "notes" in best_data:
+            allowed_fields.append("notes")
+    else:
+        # general: include a safe subset of available fields (no inferred text)
+        for f in ("name", "info", "features", "commands", "plans", "price", "setup", "notes", "bot", "access"):
+            if f in best_data:
+                allowed_fields.append(f)
+
+    # Build result strictly from KB (only present keys)
+    result = {}
+    matched_fields = []
+    for f in allowed_fields:
+        if f in best_data:
+            result[f] = best_data[f]
+            matched_fields.append(f)
+
+    # If intent expected a field but it doesn't exist, signal that explicitly
+    if intent in ("pricing", "commands", "setup") and not matched_fields:
         return json.dumps({
-            "name": best_data.get("name"),
-            "commands": best_data.get("commands"),
-            "features": best_data.get("features", [])
+            "matched_key": best_key,
+            "match_score": best_score,
+            "matched_fields": [],
+            "result": f"Requested information ({intent}) not available for '{best_key}' in KB."
         }, ensure_ascii=False)
 
-    if intent == "setup" and "setup" in best_data:
-        return json.dumps({
-            "name": best_data.get("name"),
-            "setup": best_data.get("setup"),
-            "notes": best_data.get("notes", [])
-        }, ensure_ascii=False)
-
-    # ----------------------------
-    # 6. Default: return compact project info
-    # ----------------------------
     return json.dumps({
-        "key": best_key,
-        "name": best_data.get("name"),
-        "info": best_data.get("info"),
-        "features": best_data.get("features", [])
+        "matched_key": best_key,
+        "match_score": best_score,
+        "matched_fields": matched_fields,
+        "result": result
     }, ensure_ascii=False)
+
 
 
 def fetch_telegram_history(limit=None):
