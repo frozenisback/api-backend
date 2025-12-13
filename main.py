@@ -588,9 +588,19 @@ def call_inference_stream(messages):
                         yield f"data: {json.dumps({'type': 'tool_end', 'result': 'Done'})}\n\n"
 
                         # 4. Recursion with results: feed the original assistant tool call + the tool result back to the model
+                        # IMPORTANT: inject tool result as authoritative system + assistant content so markdown is preserved
                         new_messages = messages + [
                             {"role": "assistant", "content": js},
-                            {"role": "user", "content": f"TOOL RESULT: {tool_result}"}
+                            {
+                                "role": "system",
+                                "content": (
+                                    "The following data is authoritative output from an internal tool. "
+                                    "Use it exactly as provided. Preserve any markdown formatting "
+                                    "(bold, lists, code spans, etc.) and do NOT rephrase or alter the content. "
+                                    "If the data contains steps, lists, or code, render them as-is."
+                                )
+                            },
+                            {"role": "assistant", "content": tool_result}
                         ]
 
                         # Reset buffer_text to any content after the JSON object
@@ -621,6 +631,7 @@ def call_inference_stream(messages):
     except Exception as e:
         logger.exception(f"Stream Error: {e}")
         yield f"data: {json.dumps({'type': 'error', 'content': 'Connection interrupted.'})}\n\n"
+
 
 # ----------------------------
 # 6. Routes
