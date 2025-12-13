@@ -649,76 +649,185 @@ HTML_TEMPLATE = """
         </div>
     </div>
 <script>
-    const uuid = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
-    let session_id = localStorage.getItem('kust_sid') || uuid();
-    localStorage.setItem('kust_sid', session_id);
-    document.getElementById('sess-id').innerText = session_id.substring(0,8);
-    const chatEl = document.getElementById('chat');
-    const inputEl = document.getElementById('userInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const statusDot = document.getElementById('status-dot');
-    const statusText = document.getElementById('status-text');
+(function () {
+  'use strict';
 
-    let activeToolEl = null;
+  const uuid = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
+  let session_id = localStorage.getItem('kust_sid') || uuid();
+  localStorage.setItem('kust_sid', session_id);
+  const chatEl = document.getElementById('chat');
+  const inputEl = document.getElementById('userInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const statusDot = document.getElementById('status-dot');
+  const statusText = document.getElementById('status-text');
+  const sessEl = document.getElementById('sess-id');
+  if (sessEl) sessEl.innerText = session_id.substring(0, 8);
 
-    function setBusy(busy) {
-        if(busy) { statusDot.className = 'status-indicator busy'; statusText.innerText = 'Processing...'; sendBtn.disabled = true; inputEl.disabled = true; } 
-        else { statusDot.className = 'status-indicator live'; statusText.innerText = 'System Online'; sendBtn.disabled = false; inputEl.disabled = false; inputEl.focus(); }
+  let activeToolEl = null;
+
+  function setBusy(busy) {
+    if (busy) {
+      statusDot.className = 'status-indicator busy';
+      statusText.innerText = 'Processing...';
+      if (sendBtn) sendBtn.disabled = true;
+      if (inputEl) inputEl.disabled = true;
+    } else {
+      statusDot.className = 'status-indicator live';
+      statusText.innerText = 'System Online';
+      if (sendBtn) sendBtn.disabled = false;
+      if (inputEl) { inputEl.disabled = false; inputEl.focus(); }
     }
-    function appendUserMsg(text) {
-        const div = document.createElement('div'); div.className = 'message user'; div.innerHTML = `<div class="bubble">${text}</div><div class="avatar">👤</div>`; chatEl.appendChild(div); scrollToBottom();
-    }
-    function createBotMsg() {
-        const div = document.createElement('div'); div.className = 'message'; div.innerHTML = `<div class="avatar">🤖</div><div class="bubble"><div class="thinking"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`; chatEl.appendChild(div); scrollToBottom(); return div.querySelector('.bubble');
-    }
-    function createToolCard(toolName) {
-        const div = document.createElement('div'); div.className = 'tool-card'; div.innerHTML = `<div class="tool-spinner"></div> <span>Executing: ${toolName}...</span>`; 
-        chatEl.insertBefore(div, chatEl.lastElementChild); scrollToBottom(); 
-        return div;
-    }
-    function scrollToBottom() { chatEl.scrollTop = chatEl.scrollHeight; }
+  }
 
-    async function sendMessage() {
-        const text = inputEl.value.trim(); if(!text) return;
-        inputEl.value = ''; appendUserMsg(text); setBusy(true);
-        const botBubble = createBotMsg();
-        let currentText = ""; let isFirstToken = true;
+  function appendUserMsg(text) {
+    const div = document.createElement('div');
+    div.className = 'message user';
+    const bubbleHtml = '<div class="bubble"></div><div class="avatar">👤</div>';
+    div.innerHTML = bubbleHtml;
+    // safely set text
+    const bubble = div.querySelector('.bubble');
+    bubble.textContent = text;
+    chatEl.appendChild(div);
+    scrollToBottom();
+  }
 
-        try {
-            const response = await fetch('/chat/stream', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ message: text, session_id: session_id })
-            });
-            const reader = response.body.getReader(); const decoder = new TextDecoder();
+  function createBotMsg() {
+    const div = document.createElement('div');
+    div.className = 'message';
+    div.innerHTML = '<div class="avatar">🤖</div><div class="bubble"><div class="thinking"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>';
+    chatEl.appendChild(div);
+    scrollToBottom();
+    return div.querySelector('.bubble');
+  }
 
-            while (true) {
-                const { done, value } = await reader.read(); if (done) break;
-                const chunk = decoder.decode(value); const lines = chunk.split('\n\n');
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        try {
-                            const data = JSON.parse(line.substring(6));
-                            if (data.type === 'tool_start') {
-                                activeToolEl = createToolCard(data.input || data.tool);
-                            }
-                            if (data.type === 'tool_end') {
-                                // keep a tiny grace so animations look smooth client-side as well
-                                setTimeout(() => { if(activeToolEl) activeToolEl.remove(); activeToolEl = null; }, 50);
-                            }
-                            if (data.type === 'token') {
-                                if (isFirstToken) { botBubble.innerHTML = ''; isFirstToken = false; }
-                                currentText += data.content; botBubble.innerHTML = marked.parse(currentText); scrollToBottom();
-                            }
-                            if (data.type === 'error') botBubble.innerHTML = `<span style="color:#ef4444">Error: ${data.content}</span>`;
-                        } catch (e) {}
-                    }
-                }
+  function createToolCard(toolName) {
+    const div = document.createElement('div');
+    div.className = 'tool-card';
+    div.innerHTML = '<div class="tool-spinner"></div> <span>Executing: ' + String(toolName) + '...</span>';
+    // insert before last message (keeps UI near bottom)
+    chatEl.insertBefore(div, chatEl.lastElementChild);
+    scrollToBottom();
+    return div;
+  }
+
+  function scrollToBottom() {
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  // main streaming send function
+  async function sendMessage() {
+    if (!inputEl) return;
+    const text = inputEl.value.trim();
+    if (!text) return;
+    inputEl.value = '';
+    appendUserMsg(text);
+    setBusy(true);
+    const botBubble = createBotMsg();
+    let currentText = '';
+    let isFirstToken = true;
+
+    try {
+      const response = await fetch('/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, session_id: session_id })
+      });
+
+      if (!response.body) {
+        botBubble.innerText = 'Error: no response body';
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        // decode chunk (safe)
+        const chunk = decoder.decode(value, { stream: true });
+        // split on double newline boundary as server sends SSE chunks separated by \n\n
+        const parts = chunk.split('\n\n');
+        for (const part of parts) {
+          if (!part) continue;
+          const line = part.trim();
+          if (!line.startsWith('data:')) continue;
+          const jsonPart = line.substring(5).trim();
+          try {
+            const data = JSON.parse(jsonPart);
+            if (data.type === 'tool_start') {
+              activeToolEl = createToolCard(data.input || data.tool || 'tool');
+            } else if (data.type === 'tool_end') {
+              if (activeToolEl) {
+                setTimeout(() => { try { activeToolEl.remove(); } catch (e) {} activeToolEl = null; }, 50);
+              }
+            } else if (data.type === 'token') {
+              if (isFirstToken) { botBubble.innerHTML = ''; isFirstToken = false; }
+              currentText += data.content;
+              // render markdown safely via marked
+              botBubble.innerHTML = (typeof marked !== 'undefined') ? marked.parse(currentText) : currentText;
+              scrollToBottom();
+            } else if (data.type === 'error') {
+              botBubble.innerHTML = '<span style="color:#ef4444">Error: ' + (data.content || '') + '</span>';
             }
-        } catch (err) { botBubble.innerHTML = "Connection failed."; } finally { setBusy(false); }
+          } catch (err) {
+            // ignore JSON parse errors for partial stream chunks
+            console.warn('Could not parse SSE chunk', err);
+          }
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      try { botBubble.innerText = 'Connection failed.'; } catch (e) {}
+    } finally {
+      setBusy(false);
     }
-    function ask(q) { inputEl.value = q; sendMessage(); }
-    async function resetSession() { if(confirm("Clear chat?")) { await fetch('/api/reset', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({session_id})}); location.reload(); } }
-    inputEl.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+  }
+
+  // small helpers exposed to window for inline onclick compatibility
+  function ask(q) { if (inputEl) { inputEl.value = q; sendMessage(); } }
+  async function resetSession() {
+    if (!confirm('Clear chat?')) return;
+    try {
+      await fetch('/api/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id })
+      });
+      location.reload();
+    } catch (e) {
+      console.error('reset error', e);
+      alert('Reset failed');
+    }
+  }
+
+  // Expose to global scope so inline onclick works
+  window.ask = ask;
+  window.sendMessage = sendMessage;
+  window.resetSession = resetSession;
+
+  // Defensive: attach safe listeners to quick action buttons
+  try {
+    document.querySelectorAll('.action-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (ev) {
+        // avoid interfering with existing inline onclick; use data-query if present, else use button inner text trimmed
+        const dataQuery = btn.getAttribute('data-query') || btn.getAttribute('data-q');
+        if (dataQuery) {
+          ask(dataQuery);
+          ev.preventDefault();
+        } else {
+          // leave inline onclick to handle known cases
+        }
+      });
+    });
+  } catch (e) {
+    console.warn('Quick-action listener attach failed', e);
+  }
+
+  // bind Enter key
+  if (inputEl) inputEl.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+
+})();
 </script>
 </body>
 </html>
