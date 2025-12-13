@@ -233,53 +233,61 @@ def get_session(sid):
 # ----------------------------
 # 4. Tool Implementations
 # ----------------------------
+def _normalize_text(s: str):
+    return re.sub(r"\s+", " ", (s or "").strip()).lower()
+
+
 def search_kb(query):
     """
-    Improved KB search:
-    - Broad queries return summary of projects.
+    Improved KB search that returns a structured dict (not a JSON string):
+    - Broad queries return a summary of projects.
     - Specific queries search by project name, keys, or about_me.
     - Recognizes owner/about queries robustly.
     """
     if not query:
-        return "No query provided."
+        return {"status": "error", "reason": "No query provided", "results": []}
 
-    q = query.lower().strip()
+    q = _normalize_text(query)
 
     # BROAD SEARCH LOGIC
     broad_terms = ["service", "offer", "product", "menu", "list", "available", "what do you do", "services"]
     if any(term in q for term in broad_terms):
-        summary = {"overview": []}
+        overview = []
         for key, data in KB["projects"].items():
-            summary["overview"].append({"key": key, "name": data.get("name"), "info": data.get("info", None)})
-        return json.dumps(summary, ensure_ascii=False)
+            overview.append({"key": key, "name": data.get("name"), "info": data.get("info") or data.get("features")})
+        return {"status": "ok", "query": query, "type": "overview", "results": overview}
 
     # OWNER / ABOUT queries
     owner_terms = ["kust", "owner", "about me", "about kust", "who is kust", "who are you", "about owner", "about_me"]
     if any(term in q for term in owner_terms):
-        return json.dumps(KB.get("about_me", {}), ensure_ascii=False)
+        return {"status": "ok", "query": query, "type": "about", "results": KB.get("about_me", {})}
 
-    # SPECIFIC SEARCH LOGIC
+    # SPECIFIC SEARCH LOGIC (fuzzy-ish)
     results = []
     for key, data in KB["projects"].items():
-        blob = json.dumps(data).lower()
-        if q in key or q in data.get('name', '').lower() or any(w in blob for w in q.split()):
-            # return a compact JSON-friendly dict
+        lower_blob = json.dumps(data).lower()
+        if q in key or q in data.get('name', '').lower() or any(w in lower_blob for w in q.split() if w):
             results.append({"key": key, "data": data})
 
-    if "official" in q or "fake" in q or "real" in q:
+    # compliance / official checks
+    if "official" in q or "fake" in q or "real" in q or "impersonator" in q:
         results.append({"compliance": KB['compliance']})
 
     if not results:
-        return "No specific record found. Answer based on general Kust knowledge."
-    return json.dumps(results[:5], ensure_ascii=False)
+        # helpful fallback: return a hint and a small search of keys
+        candidates = []
+        for key, data in KB["projects"].items():
+            if any(tok in data.get('name', '').lower() for tok in q.split()):
+                candidates.append(key)
+        return {"status": "ok", "query": query, "type": "no_exact_match", "hint": "No specific record found. Try keywords.", "candidates": candidates}
+
+    return {"status": "ok", "query": query, "type": "matches", "results": results}
+
 
 def fetch_telegram_history(limit=None):
     """
     Best-effort: fetch available updates via getUpdates and filter messages from TELEGRAM_CHANNEL_ID.
-    - Telegram does not provide arbitrary chat-history retrieval via bot API.
-    - This function collects all updates the bot currently has in its update queue (repeatedly),
-      aggregates them and filters for messages matching TELEGRAM_CHANNEL_ID.
-    - limit: optional max number of messages to return (after filtering).
+    Returns a structured dict (not a string).
     """
     token = TELEGRAM_BOT_TOKEN
     channel_id = str(TELEGRAM_CHANNEL_ID)
@@ -291,11 +299,11 @@ def fetch_telegram_history(limit=None):
             params = {"offset": offset or None, "limit": 100, "timeout": 0}
             r = requests.get(f"{base}/getUpdates", params=params, timeout=20)
             if r.status_code != 200:
-                return f"HTTP error {r.status_code} from Telegram."
+                return {"status": "error", "reason": f"HTTP error {r.status_code} from Telegram."}
 
             data = r.json()
             if not data.get("ok"):
-                return f"Telegram API returned error: {data}"
+                return {"status": "error", "reason": f"Telegram API returned error: {data}"}
 
             updates = data.get("result", [])
             if not updates:
@@ -312,13 +320,11 @@ def fetch_telegram_history(limit=None):
         # Filter messages relevant to the channel id
         msgs = []
         for u in all_updates:
-            # channel posts can appear as 'channel_post' or 'message'
             msg = u.get("message") or u.get("channel_post") or u.get("edited_message")
             if not msg:
                 continue
             chat = msg.get("chat", {})
             if str(chat.get("id")) == channel_id:
-                # normalize a simple structure
                 msgs.append({
                     "update_id": u.get("update_id"),
                     "message_id": msg.get("message_id"),
@@ -327,15 +333,14 @@ def fetch_telegram_history(limit=None):
                     "text": msg.get("text") or msg.get("caption") or "",
                     "raw": msg
                 })
-            # also try matching by chat.username if needed (not typical for channels)
-        # apply limit if requested
+
         if limit:
             msgs = msgs[:limit]
-        # Return structured JSON string
-        return json.dumps({"channel_id": channel_id, "found_messages": len(msgs), "messages": msgs}, ensure_ascii=False)
+
+        return {"status": "ok", "channel_id": channel_id, "found_messages": len(msgs), "messages": msgs}
     except Exception as e:
         logger.exception("Telegram fetch error")
-        return f"Exception while fetching Telegram updates: {str(e)}"
+        return {"status": "error", "reason": str(e)}
 
 # ----------------------------
 # 5. Core AI Logic (Buffered Streaming with improved tool detection)
@@ -344,6 +349,7 @@ def _find_complete_json(s: str):
     """
     Find the first complete top-level JSON object in the string `s`.
     Returns (json_str, start_index, end_index) or (None, None, None).
+    This implementation is robust to escaped quotes.
     """
     start = s.find('{')
     if start == -1:
@@ -356,7 +362,7 @@ def _find_complete_json(s: str):
         if in_str:
             if escape:
                 escape = False
-            elif ch == '\\\\':
+            elif ch == '\\':
                 escape = True
             elif ch == '"':
                 in_str = False
@@ -370,6 +376,7 @@ def _find_complete_json(s: str):
                 if depth == 0:
                     return s[start:i+1], start, i+1
     return None, None, None
+
 
 def call_inference_stream(messages):
     payload = {
@@ -387,7 +394,7 @@ def call_inference_stream(messages):
 
             buffer_text = ""  # accumulates non-tool content or possible partial JSON
             for line in r.iter_lines():
-                if not line: 
+                if not line:
                     continue
                 line = line.decode('utf-8')
                 
@@ -413,6 +420,9 @@ def call_inference_stream(messages):
                     # Some backends send 'content' directly
                     if not delta and 'content' in chunk_json:
                         delta = chunk_json.get('content', '')
+                    # Some backends put final message in choices[0].get('message', {}).get('content')
+                    if not delta:
+                        delta = chunk_json.get('choices', [{}])[0].get('message', {}).get('content', '') if chunk_json.get('choices') else ''
 
                     if not delta:
                         continue
@@ -439,43 +449,50 @@ def call_inference_stream(messages):
                             buffer_text = after
                             continue
 
-                        tool_name = tool_data.get("tool")
-                        query = tool_data.get("query")
+                        # Accept multiple possible keys for tool name and query
+                        tool_name = tool_data.get('tool') or tool_data.get('action') or tool_data.get('tool_name')
+                        query = tool_data.get('query') or tool_data.get('q') or tool_data.get('input')
+
+                        # Normalize tool name for dispatch
+                        tool_name_lower = (tool_name or "").lower() if tool_name else ""
 
                         # 1. Start Tool (Frontend Animation)
-                        yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'input': query})}\n\n"
+                        yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name_lower, 'input': query})}\n\n"
 
-                        # 2. Execute tool (simulate small delay to show spinner)
-                        # Keep animation visible for a short moment after tool finishes
+                        # 2. Execute tool
                         try:
-                            tool_name_lower = (tool_name or "").lower() if tool_name else ""
-                            if tool_name_lower == "get_info" or tool_name_lower == "getinfo":
+                            if tool_name_lower in ("get_info", "getinfo", "get_info", "get_info_tool", "get_info_tool"):
                                 tool_result = search_kb(query)
                             elif tool_name_lower in ("get_telegram_history", "get_telegram_updates", "tg_history", "telegram_history"):
-                                # fetch from Telegram using raw HTTP Bot API (best-effort)
                                 tool_result = fetch_telegram_history(limit=None)
                             else:
-                                tool_result = "Tool not found."
+                                tool_result = {"status": "error", "reason": "Tool not found", "tool": tool_name}
                         except Exception as e:
-                            tool_result = f"Tool execution error: {str(e)}"
+                            tool_result = {"status": "error", "reason": f"Tool execution error: {str(e)}"}
+
+                        # Ensure tool_result is JSON-serializable
+                        try:
+                            tool_result_serializable = tool_result if isinstance(tool_result, dict) else {"result": str(tool_result)}
+                        except Exception:
+                            tool_result_serializable = {"result": str(tool_result)}
 
                         # small pause to make the tool feel real and keep animation visible
-                        time.sleep(1.8)
+                        time.sleep(1.0)
 
                         # 3. End Tool (Frontend Delete Animation)
                         yield f"data: {json.dumps({'type': 'tool_end', 'result': 'Done'})}\n\n"
 
                         # 4. Recursion with results: feed the original assistant tool call + the tool result back to the model
+                        # Put assistant content as the original JSON tool call string, and user content as a clear TOOL_RESULT JSON blob
                         new_messages = messages + [
                             {"role": "assistant", "content": js},
-                            {"role": "user", "content": f"TOOL RESULT: {tool_result}"}
+                            {"role": "user", "content": f"TOOL_RESULT: {json.dumps(tool_result_serializable, ensure_ascii=False)}"}
                         ]
 
                         # Reset buffer_text to any content after the JSON object
                         buffer_text = after
 
                         # Recurse: continue streaming using the updated messages context
-                        # This will produce additional streamed tokens which we will yield to the client
                         yield from call_inference_stream(new_messages)
                         # After recursion returns, continue processing remaining stream normally
                         continue
@@ -484,7 +501,7 @@ def call_inference_stream(messages):
                         # we hold it back until complete to avoid leaking partial JSON text into the UI.
                         if '{' in buffer_text:
                             # if buffer grows too large without closing braces, flush a portion to avoid memory blow
-                            if len(buffer_text) > 2048:
+                            if len(buffer_text) > 4096:
                                 yield f"data: {json.dumps({'type': 'token', 'content': buffer_text})}\n\n"
                                 buffer_text = ""
                         else:
@@ -676,7 +693,7 @@ HTML_TEMPLATE = """
 
             while (true) {
                 const { done, value } = await reader.read(); if (done) break;
-                const chunk = decoder.decode(value); const lines = chunk.split('\\n\\n');
+                const chunk = decoder.decode(value); const lines = chunk.split('\n\n');
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
                         try {
