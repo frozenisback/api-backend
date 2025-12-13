@@ -235,21 +235,26 @@ def get_session(sid):
 # ----------------------------
 def search_kb(query):
     """
-    Conservative, intent-aware KB search.
+    Natural-language, conservative KB search.
 
-    - Detects simple intent (pricing, setup, commands, about, services, general)
-    - Scores projects by keyword overlap (no content invention)
-    - RETURNS ONLY FIELDS PRESENT IN THE KB (no added or inferred text)
-    - Response is a JSON string with:
-        { matched_key, match_score, matched_fields, result: {...} }
+    - Returns a plain text answer (no markdown, no code blocks).
+    - Uses only fields present inside KB (no invention).
+    - Detects simple intents: pricing, setup, commands, about, services, general.
+    - Sanitizes stored text (removes **, backticks).
     """
+    def sanitize(s):
+        if not isinstance(s, str):
+            return s
+        # remove markdown ** and backticks and trim
+        return re.sub(r'[`*]', '', s).strip()
+
     if not query or not isinstance(query, str):
-        return json.dumps({"error": "No query provided."}, ensure_ascii=False)
+        return "No query provided."
 
     q = query.lower().strip()
     words = [w for w in re.split(r"\W+", q) if len(w) > 2]
 
-    # Intent detection (strict)
+    # Intent detection (strict, conservative)
     intent = "general"
     if any(k in q for k in ["price", "pricing", "cost", "plan", "plans"]):
         intent = "pricing"
@@ -262,33 +267,39 @@ def search_kb(query):
     elif any(k in q for k in ["service", "offer", "product", "what do you do", "available"]):
         intent = "services"
 
-    # ABOUT (explicit)
+    # ABOUT intent -> plain paragraph
     if intent == "about":
-        return json.dumps({
-            "matched_key": "about_me",
-            "match_score": 100,
-            "matched_fields": list(KB.get("about_me", {}).keys()),
-            "result": KB.get("about_me", {})
-        }, ensure_ascii=False)
+        about = KB.get("about_me", {})
+        if not about:
+            return "No 'about' information available."
+        name = sanitize(about.get("preferred_name", ""))
+        main_handle = sanitize(about.get("primary_telegram", ""))
+        website = sanitize(about.get("website", ""))
+        projects = about.get("infrastructure_projects", [])
+        projects_text = ", ".join([sanitize(p) for p in projects]) if projects else "No projects listed."
+        skills = about.get("developer_skills", [])
+        skills_text = ", ".join([sanitize(s) for s in skills]) if skills else ""
+        resp = f"{name} ({main_handle}) is the owner/developer. Website: {website or 'not provided'}. "
+        resp += f"Main projects include: {projects_text}."
+        if skills_text:
+            resp += f" Key skills: {skills_text}."
+        return resp
 
-    # SERVICES (list available projects)
+    # SERVICES intent -> short list sentence
     if intent == "services":
-        services = [{"key": k, "name": v.get("name")} for k, v in KB.get("projects", {}).items()]
-        return json.dumps({
-            "matched_key": "projects_overview",
-            "match_score": 100,
-            "matched_fields": ["projects"],
-            "result": {"services": services}
-        }, ensure_ascii=False)
+        projects = KB.get("projects", {})
+        if not projects:
+            return "No services listed in KB."
+        names = [sanitize(v.get("name", k)) for k, v in projects.items()]
+        return "We offer the following services: " + ", ".join(names) + "."
 
-    # Score projects conservatively (only token overlap against keys, names, and content)
+    # Score projects conservatively (only token overlap)
     scored = []
     for key, data in KB.get("projects", {}).items():
         score = 0
         name = data.get("name", "").lower()
         blob = json.dumps(data).lower()
 
-        # token overlap scoring (weights favor key/name)
         for w in words:
             if w in key:
                 score += 6
@@ -297,8 +308,8 @@ def search_kb(query):
             if w in blob:
                 score += 1
 
-        # small boost if exact intent field exists
-        if intent == "pricing" and ("plans" in data or "price" in data or "pricing" in data):
+        # boosts for intent when fields exist
+        if intent == "pricing" and any(f in data for f in ("plans", "price", "pricing")):
             score += 8
         if intent == "commands" and "commands" in data:
             score += 6
@@ -308,69 +319,79 @@ def search_kb(query):
         if score > 0:
             scored.append((score, key, data))
 
-    # If no scored matches, try an exact key or exact name match as fallback
+    # fallback: exact key/name match
     if not scored:
         for key, data in KB.get("projects", {}).items():
             if q == key or q == data.get("name", "").lower():
                 scored.append((10, key, data))
                 break
 
+    # nothing reliable found
     if not scored:
-        # nothing reliable found — return safe fallback (no hallucination)
-        return json.dumps({
-            "matched_key": None,
-            "match_score": 0,
-            "matched_fields": [],
-            "result": "No specific record found in KB. Answer based on general Kust knowledge is disabled to avoid hallucination."
-        }, ensure_ascii=False)
+        return "No matching record found in the knowledge base. I will not guess or invent details."
 
-    # Pick best match
+    # best match
     scored.sort(key=lambda x: x[0], reverse=True)
     best_score, best_key, best_data = scored[0]
+    name = sanitize(best_data.get("name", best_key))
 
-    # Decide which fields to return based only on what's present in KB and the detected intent
-    allowed_fields = []
+    # INTENT-SPECIFIC NATURAL RESPONSES (plain text)
     if intent == "pricing":
-        for f in ("plans", "price", "pricing"):
-            if f in best_data:
-                allowed_fields.append(f)
-    elif intent == "commands":
-        if "commands" in best_data:
-            allowed_fields.append("commands")
-    elif intent == "setup":
-        if "setup" in best_data:
-            allowed_fields.append("setup")
-        if "notes" in best_data:
-            allowed_fields.append("notes")
-    else:
-        # general: include a safe subset of available fields (no inferred text)
-        for f in ("name", "info", "features", "commands", "plans", "price", "setup", "notes", "bot", "access"):
-            if f in best_data:
-                allowed_fields.append(f)
+        plans = best_data.get("plans") or {}
+        price_field = best_data.get("price") or best_data.get("pricing")
+        if plans:
+            # Build plans as plain sentences
+            parts = []
+            for pname, pinfo in plans.items():
+                parts.append(f"{sanitize(pname)}: {sanitize(pinfo)}")
+            info = sanitize(best_data.get("info", ""))
+            resp = f"{name} plans: " + "; ".join(parts) + "."
+            if info:
+                resp += " " + info
+            return resp
+        elif price_field:
+            return f"{name} pricing: {sanitize(price_field)}"
+        else:
+            return f"Requested pricing information is not available for '{name}' in the KB."
 
-    # Build result strictly from KB (only present keys)
-    result = {}
-    matched_fields = []
-    for f in allowed_fields:
+    if intent == "commands":
+        cmds = best_data.get("commands")
+        if cmds:
+            return f"Commands for {name}: " + ", ".join([sanitize(c) for c in cmds]) + "."
+        else:
+            return f"No command list available for '{name}' in the KB."
+
+    if intent == "setup":
+        steps = best_data.get("setup", [])
+        notes = best_data.get("notes", [])
+        if steps:
+            # join steps into readable lines without markdown
+            steps_text = " ".join([sanitize(s) for s in steps])
+            resp = f"Setup instructions for {name}: {steps_text}"
+            if notes:
+                resp += " Important notes: " + " ".join([sanitize(n) for n in notes])
+            return resp
+        else:
+            return f"No setup instructions available for '{name}' in the KB."
+
+    # GENERAL response: include only available fields (no extra claims)
+    parts = []
+    for f in ("info", "features", "commands", "plans", "price", "pricing", "setup", "notes", "bot", "access"):
         if f in best_data:
-            result[f] = best_data[f]
-            matched_fields.append(f)
+            val = best_data[f]
+            if isinstance(val, list):
+                val_text = ", ".join([sanitize(x) for x in val])
+            elif isinstance(val, dict):
+                # small dict to comma list
+                val_text = ", ".join([f"{sanitize(k)}: {sanitize(v)}" for k, v in val.items()])
+            else:
+                val_text = sanitize(val)
+            parts.append(f"{sanitize(f)}: {val_text}")
+    if parts:
+        return f"{name} - " + " ".join(parts)
+    else:
+        return f"Found '{name}' in KB but no displayable fields are present."
 
-    # If intent expected a field but it doesn't exist, signal that explicitly
-    if intent in ("pricing", "commands", "setup") and not matched_fields:
-        return json.dumps({
-            "matched_key": best_key,
-            "match_score": best_score,
-            "matched_fields": [],
-            "result": f"Requested information ({intent}) not available for '{best_key}' in KB."
-        }, ensure_ascii=False)
-
-    return json.dumps({
-        "matched_key": best_key,
-        "match_score": best_score,
-        "matched_fields": matched_fields,
-        "result": result
-    }, ensure_ascii=False)
 
 
 
