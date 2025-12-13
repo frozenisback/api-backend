@@ -554,6 +554,7 @@ def call_inference_stream(messages):
                     tool_name = tool_data.get("tool")
                     query = tool_data.get("query")
 
+                    # Tool start
                     yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'input': query})}\n\n"
 
                     try:
@@ -567,27 +568,13 @@ def call_inference_stream(messages):
                     except Exception as e:
                         tool_result = f"Tool execution error: {str(e)}"
 
-                    time.sleep(1.8)
+                    time.sleep(0.8)
 
+                    # Tool end
                     yield f"data: {json.dumps({'type': 'tool_end', 'result': 'Done'})}\n\n"
 
-                    new_messages = messages + [
-                        {"role": "assistant", "content": js},
-                        {
-                            "role": "system",
-                            "content": (
-                                "The following data is authoritative tool output. "
-                                "Use it exactly as provided. Preserve markdown formatting. "
-                                "Do not rephrase or invent anything."
-                            )
-                        },
-                        {"role": "assistant", "content": tool_result}
-                    ]
-
-                    buffer_text = after
-
-                    # 🔴 FIX: terminate current generator after recursion
-                    yield from call_inference_stream(new_messages)
+                    # 🔥 FINAL ANSWER: STREAM TOOL RESULT DIRECTLY
+                    yield f"data: {json.dumps({'type': 'token', 'content': tool_result})}\n\n"
                     return
 
                 else:
@@ -603,8 +590,9 @@ def call_inference_stream(messages):
                 yield f"data: {json.dumps({'type': 'token', 'content': buffer_text})}\n\n"
 
     except Exception as e:
-        logger.exception(f"Stream Error: {e}")
+        logger.exception("Stream Error")
         yield f"data: {json.dumps({'type': 'error', 'content': 'Connection interrupted.'})}\n\n"
+
 
 
 
