@@ -56,7 +56,7 @@ KB = {
             "access": "@kustchatbot",
             "price": "Free 3-hour trial available for new users",
             "features": [
-                "Autonomous chat generator (not spam — human-like behavioural model)",
+                "Autonomous chat generator (not spam - human-like behavioural model)",
                 "Farms Rains 24/7 without interruptions",
                 "Multi-account support for users managing several Stake accounts",
                 "Works on all Stake servers and mirror links",
@@ -71,21 +71,21 @@ KB = {
                 "3. Enter your real Stake username (CASE-SENSITIVE; must match exactly)",
                 "4. Bot provides an **unpacked extension** (.zip)",
                 "5. Unzip the folder on your PC",
-                "6. Open Chrome → go to **chrome://extensions**",
+                "6. Open Chrome -> go to **chrome://extensions**",
                 "7. Enable **Developer Mode** (top-right)",
                 "8. Click **Load Unpacked** and select the unzipped extension folder",
                 "9. Open Stake.com or any Stake mirror (example: https://stake.com/casino/games/mines)",
-                "10. Open Extensions panel → enable the Stake Chat Farmer extension",
-                "11. Refresh the Stake page → a popup appears on the left-hand side",
-                "12. If your trial or subscription is active, you will see **Enable AI** → click it",
+                "10. Open Extensions panel -> enable the Stake Chat Farmer extension",
+                "11. Refresh the Stake page -> a popup appears on the left-hand side",
+                "12. If your trial or subscription is active, you will see **Enable AI** -> click it",
                 "13. Chat Farmer will begin farming XP/Levels automatically",
-                "14. If trial expired: Open @kustchatbot → /start → Buy Subscription",
-                "15. Enter Stake username again → choose payment method (Crypto or UPI)",
+                "14. If trial expired: Open @kustchatbot -> /start -> Buy Subscription",
+                "15. Enter Stake username again -> choose payment method (Crypto or UPI)",
                 "16. UPI = processed manually; Crypto = processed via automated Val/Oxa Pay",
                 "17. Once payment is confirmed, extension instantly activates"
             ],
             "notes": [
-                "Username must match Stake exactly — incorrect casing → auto-reject",
+                "Username must match Stake exactly - incorrect casing -> auto-reject",
                 "Do not rename extension folder; Chrome will not load it",
                 "Bot also shows a **Hindi setup video** for easy onboarding"
             ]
@@ -110,7 +110,7 @@ KB = {
                 "Video playback support in groups and channels",
                 "Distributed backend: metadata servers, routing servers, playback nodes",
                 "Multi-layer caching for instant replay performance",
-                "Pre-caching when songs are queued → near-zero wait time",
+                "Pre-caching when songs are queued -> near-zero wait time",
                 "Load-balanced playback nodes (each ~10 concurrent VCs)",
                 "RR (Real-time Redirect) stream fetching + fallback yt-dlp pipeline",
                 "Cloudflare Worker event-based routing for stable global performance"
@@ -136,7 +136,7 @@ KB = {
         "custom_bots": {
             "name": "Paid Custom Bots",
             "pricing": (
-                "Simple commands: $2–$5 each. Music bots: $4/mo (Tier 1) up to $20/mo (Tier 3). "
+                "Simple commands: $2- $5 each. Music bots: $4/mo (Tier 1) up to $20/mo (Tier 3). "
                 "Complex systems priced based on features and infrastructure load."
             ),
             "info": (
@@ -572,8 +572,8 @@ HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>KUSTX | Support Terminal</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
@@ -634,198 +634,202 @@ HTML_TEMPLATE = """
         <div class="status-box"><div id="status-dot" class="status-indicator live"></div><span id="status-text">System Online</span></div>
         <div class="quick-actions">
             <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Quick Access</div>
-            <button class="action-btn" onclick="ask('What is Kustify Hosting pricing?')">💰 Hosting Plans</button>
-            <button class="action-btn" onclick="ask('How do I setup the Stake Chat Farmer?')">🤖 Stake Farmer Setup</button>
-            <button class="action-btn" onclick="ask('Show me commands for Frozen Music Bot')">🎵 Music Bot Cmds</button>
+            <button class="action-btn" data-query="What is Kustify Hosting pricing?">💰 Hosting Plans</button>
+            <button class="action-btn" data-query="How do I setup the Stake Chat Farmer?">🤖 Stake Farmer Setup</button>
+            <button class="action-btn" data-query="Show me commands for Frozen Music Bot">🎵 Music Bot Cmds</button>
         </div>
-        <div style="margin-top:auto; font-size:0.75rem; color:var(--text-dim);">Session ID: <span id="sess-id" style="font-family:monospace">...</span><br><a href="#" onclick="resetSession()" style="color:var(--accent)">Reset Session</a></div>
+        <div style="margin-top:auto; font-size:0.75rem; color:var(--text-dim);">Session ID: <span id="sess-id" style="font-family:monospace">...</span><br><a href="#" id="reset-link" style="color:var(--accent)">Reset Session</a></div>
     </div>
     <div class="main">
         <div class="chat-container" id="chat">
-            <div class="message"><div class="avatar">🤖</div><div class="bubble"><p><strong>KustX Online.</strong></p><p>I am KustX. How can I help you?</p></div></div>
+            <div class="message"><div class="avatar">BOT</div><div class="bubble"><p><strong>KustX Online.</strong></p><p>I am KustX. How can I help you?</p></div></div>
         </div>
         <div class="input-area">
-            <div class="input-wrapper"><input type="text" id="userInput" placeholder="Type your issue..." autocomplete="off"><button class="send" id="sendBtn" onclick="sendMessage()">SEND</button></div>
+            <div class="input-wrapper"><input type="text" id="userInput" placeholder="Type your issue..." autocomplete="off"><button class="send" id="sendBtn">SEND</button></div>
         </div>
     </div>
 <script>
 (function () {
   'use strict';
 
-  const uuid = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
-  let session_id = localStorage.getItem('kust_sid') || uuid();
+  // Use only safe ASCII characters in this script to avoid hidden unicode token issues.
+  var uuid = function () { return Math.random().toString(36).substring(2) + Date.now().toString(36); };
+  var session_id = localStorage.getItem('kust_sid') || uuid();
   localStorage.setItem('kust_sid', session_id);
-  const chatEl = document.getElementById('chat');
-  const inputEl = document.getElementById('userInput');
-  const sendBtn = document.getElementById('sendBtn');
-  const statusDot = document.getElementById('status-dot');
-  const statusText = document.getElementById('status-text');
-  const sessEl = document.getElementById('sess-id');
+
+  var chatEl = document.getElementById('chat');
+  var inputEl = document.getElementById('userInput');
+  var sendBtn = document.getElementById('sendBtn');
+  var statusDot = document.getElementById('status-dot');
+  var statusText = document.getElementById('status-text');
+  var sessEl = document.getElementById('sess-id');
   if (sessEl) sessEl.innerText = session_id.substring(0, 8);
 
-  let activeToolEl = null;
+  var activeToolEl = null;
 
   function setBusy(busy) {
     if (busy) {
-      statusDot.className = 'status-indicator busy';
-      statusText.innerText = 'Processing...';
+      if (statusDot) statusDot.className = 'status-indicator busy';
+      if (statusText) statusText.innerText = 'Processing...';
       if (sendBtn) sendBtn.disabled = true;
       if (inputEl) inputEl.disabled = true;
     } else {
-      statusDot.className = 'status-indicator live';
-      statusText.innerText = 'System Online';
+      if (statusDot) statusDot.className = 'status-indicator live';
+      if (statusText) statusText.innerText = 'System Online';
       if (sendBtn) sendBtn.disabled = false;
       if (inputEl) { inputEl.disabled = false; inputEl.focus(); }
     }
   }
 
   function appendUserMsg(text) {
-    const div = document.createElement('div');
+    var div = document.createElement('div');
     div.className = 'message user';
-    const bubbleHtml = '<div class="bubble"></div><div class="avatar">👤</div>';
+    var bubbleHtml = '<div class="bubble"></div><div class="avatar">USER</div>';
     div.innerHTML = bubbleHtml;
-    // safely set text
-    const bubble = div.querySelector('.bubble');
+    var bubble = div.querySelector('.bubble');
     bubble.textContent = text;
     chatEl.appendChild(div);
     scrollToBottom();
   }
 
   function createBotMsg() {
-    const div = document.createElement('div');
+    var div = document.createElement('div');
     div.className = 'message';
-    div.innerHTML = '<div class="avatar">🤖</div><div class="bubble"><div class="thinking"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>';
+    div.innerHTML = '<div class="avatar">BOT</div><div class="bubble"><div class="thinking"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>';
     chatEl.appendChild(div);
     scrollToBottom();
     return div.querySelector('.bubble');
   }
 
   function createToolCard(toolName) {
-    const div = document.createElement('div');
+    var div = document.createElement('div');
     div.className = 'tool-card';
     div.innerHTML = '<div class="tool-spinner"></div> <span>Executing: ' + String(toolName) + '...</span>';
-    // insert before last message (keeps UI near bottom)
-    chatEl.insertBefore(div, chatEl.lastElementChild);
+    try {
+      chatEl.insertBefore(div, chatEl.lastElementChild);
+    } catch (e) {
+      chatEl.appendChild(div);
+    }
     scrollToBottom();
     return div;
   }
 
   function scrollToBottom() {
-    chatEl.scrollTop = chatEl.scrollHeight;
+    try { chatEl.scrollTop = chatEl.scrollHeight; } catch (e) {}
   }
 
-  // main streaming send function
   async function sendMessage() {
     if (!inputEl) return;
-    const text = inputEl.value.trim();
+    var text = inputEl.value.trim();
     if (!text) return;
     inputEl.value = '';
     appendUserMsg(text);
     setBusy(true);
-    const botBubble = createBotMsg();
-    let currentText = '';
-    let isFirstToken = true;
+    var botBubble = createBotMsg();
+    var currentText = '';
+    var isFirstToken = true;
 
     try {
-      const response = await fetch('/chat/stream', {
+      var response = await fetch('/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, session_id: session_id })
       });
 
-      if (!response.body) {
+      if (!response || !response.body) {
         botBubble.innerText = 'Error: no response body';
         return;
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
+      var reader = response.body.getReader();
+      var decoder = new TextDecoder();
 
       while (true) {
-        const { done, value } = await reader.read();
+        var _ref = await reader.read();
+        var done = _ref.done;
+        var value = _ref.value;
         if (done) break;
-        // decode chunk (safe)
-        const chunk = decoder.decode(value, { stream: true });
-        // split on double newline boundary as server sends SSE chunks separated by \n\n
-        const parts = chunk.split('\n\n');
-        for (const part of parts) {
+        var chunk = decoder.decode(value, { stream: true });
+        var parts = chunk.split('\\n\\n');
+        for (var i = 0; i < parts.length; i++) {
+          var part = parts[i];
           if (!part) continue;
-          const line = part.trim();
-          if (!line.startsWith('data:')) continue;
-          const jsonPart = line.substring(5).trim();
+          var line = part.trim();
+          if (line.indexOf('data:') !== 0) continue;
+          var jsonPart = line.substring(5).trim();
           try {
-            const data = JSON.parse(jsonPart);
+            var data = JSON.parse(jsonPart);
             if (data.type === 'tool_start') {
               activeToolEl = createToolCard(data.input || data.tool || 'tool');
             } else if (data.type === 'tool_end') {
               if (activeToolEl) {
-                setTimeout(() => { try { activeToolEl.remove(); } catch (e) {} activeToolEl = null; }, 50);
+                setTimeout(function () { try { activeToolEl.remove(); } catch (e) {} activeToolEl = null; }, 50);
               }
             } else if (data.type === 'token') {
               if (isFirstToken) { botBubble.innerHTML = ''; isFirstToken = false; }
-              currentText += data.content;
-              // render markdown safely via marked
-              botBubble.innerHTML = (typeof marked !== 'undefined') ? marked.parse(currentText) : currentText;
+              currentText += data.content || '';
+              if (typeof marked !== 'undefined') {
+                botBubble.innerHTML = marked.parse(currentText);
+              } else {
+                botBubble.textContent = currentText;
+              }
               scrollToBottom();
             } else if (data.type === 'error') {
               botBubble.innerHTML = '<span style="color:#ef4444">Error: ' + (data.content || '') + '</span>';
             }
           } catch (err) {
-            // ignore JSON parse errors for partial stream chunks
-            console.warn('Could not parse SSE chunk', err);
+            // ignore partial parse errors
+            // console.warn('SSE parse', err);
           }
         }
       }
     } catch (err) {
-      console.error(err);
       try { botBubble.innerText = 'Connection failed.'; } catch (e) {}
     } finally {
       setBusy(false);
     }
   }
 
-  // small helpers exposed to window for inline onclick compatibility
-  function ask(q) { if (inputEl) { inputEl.value = q; sendMessage(); } }
-  async function resetSession() {
+  // Expose helper functions explicitly to global so any inline handlers (if present) will work
+  window.kustx_ask = function (q) { if (inputEl) { inputEl.value = q; sendMessage(); } };
+  window.kustx_sendMessage = sendMessage;
+  window.kustx_resetSession = async function () {
     if (!confirm('Clear chat?')) return;
     try {
       await fetch('/api/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id })
+        body: JSON.stringify({ session_id: session_id })
       });
       location.reload();
     } catch (e) {
-      console.error('reset error', e);
       alert('Reset failed');
     }
-  }
+  };
 
-  // Expose to global scope so inline onclick works
-  window.ask = ask;
-  window.sendMessage = sendMessage;
-  window.resetSession = resetSession;
-
-  // Defensive: attach safe listeners to quick action buttons
-  try {
-    document.querySelectorAll('.action-btn').forEach(function (btn) {
+  // Attach click handlers to quick-action buttons (avoid inline onclick).
+  var quickButtons = document.querySelectorAll('.action-btn');
+  for (var ib = 0; ib < quickButtons.length; ib++) {
+    (function (btn) {
+      var q = btn.getAttribute('data-query');
       btn.addEventListener('click', function (ev) {
-        // avoid interfering with existing inline onclick; use data-query if present, else use button inner text trimmed
-        const dataQuery = btn.getAttribute('data-query') || btn.getAttribute('data-q');
-        if (dataQuery) {
-          ask(dataQuery);
+        if (q) {
+          window.kustx_ask(q);
           ev.preventDefault();
-        } else {
-          // leave inline onclick to handle known cases
         }
       });
-    });
-  } catch (e) {
-    console.warn('Quick-action listener attach failed', e);
+    })(quickButtons[ib]);
   }
 
-  // bind Enter key
-  if (inputEl) inputEl.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+  // Attach send button and Enter key
+  if (sendBtn) sendBtn.addEventListener('click', function () { sendMessage(); });
+  if (inputEl) inputEl.addEventListener('keypress', function (e) { if (e.key === 'Enter') sendMessage(); });
+
+  // Attach reset link
+  var resetLink = document.getElementById('reset-link');
+  if (resetLink) {
+    resetLink.addEventListener('click', function (ev) { ev.preventDefault(); window.kustx_resetSession(); });
+  }
 
 })();
 </script>
