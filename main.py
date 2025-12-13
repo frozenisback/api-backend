@@ -478,7 +478,7 @@ def _find_complete_json(s: str):
         if in_str:
             if escape:
                 escape = False
-            elif ch == '\\\\':
+            elif ch == '\\':
                 escape = True
             elif ch == '"':
                 in_str = False
@@ -498,7 +498,7 @@ def call_inference_stream(messages):
         "model": INFERENCE_MODEL_ID,
         "messages": messages,
         "stream": True,
-        "temperature": 0.5
+        "temperature": 0.5 # Balanced for natural conversation
     }
     
     try:
@@ -507,94 +507,121 @@ def call_inference_stream(messages):
                 yield f"data: {json.dumps({'type': 'error', 'content': f'API Error {r.status_code}'})}\n\n"
                 return
 
-            buffer_text = ""
+            buffer_text = ""  # accumulates non-tool content or possible partial JSON
             for line in r.iter_lines():
-                if not line:
+                if not line: 
                     continue
                 line = line.decode('utf-8')
-
-                if not line.startswith('data:'):
-                    continue
-
-                data_str = line[5:].strip()
-                if data_str == '[DONE]':
-                    if buffer_text:
-                        yield f"data: {json.dumps({'type': 'token', 'content': buffer_text})}\n\n"
-                    return
-
-                try:
-                    chunk_json = json.loads(data_str)
-                except Exception:
-                    continue
-
-                delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
-                if not delta and 'content' in chunk_json:
-                    delta = chunk_json.get('content', '')
-
-                if not delta:
-                    continue
-
-                buffer_text += delta
-
-                js, sidx, eidx = _find_complete_json(buffer_text)
-                if js:
-                    before = buffer_text[:sidx]
-                    after = buffer_text[eidx:]
-
-                    if before:
-                        yield f"data: {json.dumps({'type': 'token', 'content': before})}\n\n"
-
-                    try:
-                        tool_data = json.loads(js)
-                    except Exception:
-                        yield f"data: {json.dumps({'type': 'token', 'content': js})}\n\n"
-                        buffer_text = after
-                        continue
-
-                    tool_name = tool_data.get("tool")
-                    query = tool_data.get("query")
-
-                    # Tool start
-                    yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'input': query})}\n\n"
-
-                    try:
-                        tool_name_lower = (tool_name or "").lower()
-                        if tool_name_lower in ("get_info", "getinfo"):
-                            tool_result = search_kb(query)
-                        elif tool_name_lower in ("get_telegram_history", "get_telegram_updates", "tg_history", "telegram_history"):
-                            tool_result = fetch_telegram_history(limit=None)
-                        else:
-                            tool_result = "Tool not found."
-                    except Exception as e:
-                        tool_result = f"Tool execution error: {str(e)}"
-
-                    time.sleep(0.8)
-
-                    # Tool end
-                    yield f"data: {json.dumps({'type': 'tool_end', 'result': 'Done'})}\n\n"
-
-                    # 🔥 FINAL ANSWER: STREAM TOOL RESULT DIRECTLY
-                    yield f"data: {json.dumps({'type': 'token', 'content': tool_result})}\n\n"
-                    return
-
-                else:
-                    if '{' in buffer_text:
-                        if len(buffer_text) > 2048:
+                
+                if line.startswith('data:'):
+                    data_str = line[5:].strip()
+                    if data_str == '[DONE]':
+                        # Flush any remaining buffer_text
+                        if buffer_text:
                             yield f"data: {json.dumps({'type': 'token', 'content': buffer_text})}\n\n"
                             buffer_text = ""
-                    else:
-                        yield f"data: {json.dumps({'type': 'token', 'content': buffer_text})}\n\n"
-                        buffer_text = ""
+                        break
+                    
+                    try:
+                        chunk_json = json.loads(data_str)
+                    except Exception:
+                        # if parsing fails, skip this line
+                        continue
 
+                    # Extract token delta if present
+                    delta = ""
+                    # Standard streaming delta
+                    delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                    # Some backends send 'content' directly
+                    if not delta and 'content' in chunk_json:
+                        delta = chunk_json.get('content', '')
+
+                    if not delta:
+                        continue
+
+                    # Append incoming delta to buffer_text (we will decide when to flush)
+                    buffer_text += delta
+
+                    # Check for a complete JSON object in buffer_text (tool call)
+                    js, sidx, eidx = _find_complete_json(buffer_text)
+                    if js:
+                        # Found a complete JSON object — split buffer into before/json/after
+                        before = buffer_text[:sidx]
+                        after = buffer_text[eidx:]
+                        # Flush any "before" text as normal tokens
+                        if before:
+                            yield f"data: {json.dumps({'type': 'token', 'content': before})}\n\n"
+
+                        # Try parse the JSON as tool instruction
+                        try:
+                            tool_data = json.loads(js)
+                        except Exception:
+                            # If parse fails for some reason, emit the whole js as token
+                            yield f"data: {json.dumps({'type': 'token', 'content': js})}\n\n"
+                            buffer_text = after
+                            continue
+
+                        tool_name = tool_data.get("tool")
+                        query = tool_data.get("query")
+
+                        # 1. Start Tool (Frontend Animation)
+                        yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'input': query})}\n\n"
+
+                        # 2. Execute tool (simulate small delay to show spinner)
+                        # Keep animation visible for a short moment after tool finishes
+                        try:
+                            tool_name_lower = (tool_name or "").lower() if tool_name else ""
+                            if tool_name_lower == "get_info" or tool_name_lower == "getinfo":
+                                tool_result = search_kb(query)
+                            elif tool_name_lower in ("get_telegram_history", "get_telegram_updates", "tg_history", "telegram_history"):
+                                # fetch from Telegram using raw HTTP Bot API (best-effort)
+                                tool_result = fetch_telegram_history(limit=None)
+                            else:
+                                tool_result = "Tool not found."
+                        except Exception as e:
+                            tool_result = f"Tool execution error: {str(e)}"
+
+                        # small pause to make the tool feel real and keep animation visible
+                        time.sleep(1.8)
+
+                        # 3. End Tool (Frontend Delete Animation)
+                        yield f"data: {json.dumps({'type': 'tool_end', 'result': 'Done'})}\n\n"
+
+                        # 4. Recursion with results: feed the original assistant tool call + the tool result back to the model
+                        new_messages = messages + [
+                            {"role": "assistant", "content": js},
+                            {"role": "user", "content": f"TOOL RESULT: {tool_result}"}
+                        ]
+
+                        # Reset buffer_text to any content after the JSON object
+                        buffer_text = after
+
+                        # Recurse: continue streaming using the updated messages context
+                        # This will produce additional streamed tokens which we will yield to the client
+                        for event in call_inference_stream(new_messages):
+                            yield event
+                        # After recursion returns, continue processing remaining stream normally
+                        continue
+                    else:
+                        # No complete JSON found yet — if buffer_text looks like it MAY contain a JSON start ('{'),
+                        # we hold it back until complete to avoid leaking partial JSON text into the UI.
+                        if '{' in buffer_text:
+                            # if buffer grows too large without closing braces, flush a portion to avoid memory blow
+                            if len(buffer_text) > 2048:
+                                yield f"data: {json.dumps({'type': 'token', 'content': buffer_text})}\n\n"
+                                buffer_text = ""
+                        else:
+                            # safe to flush immediately (no JSON in sight)
+                            yield f"data: {json.dumps({'type': 'token', 'content': buffer_text})}\n\n"
+                            buffer_text = ""
+
+            # finished streaming; flush any remaining residual
             if buffer_text:
                 yield f"data: {json.dumps({'type': 'token', 'content': buffer_text})}\n\n"
 
     except Exception as e:
-        logger.exception("Stream Error")
+        logger.exception(f"Stream Error: {e}")
         yield f"data: {json.dumps({'type': 'error', 'content': 'Connection interrupted.'})}\n\n"
-
-
-
 
 # ----------------------------
 # 6. Routes
