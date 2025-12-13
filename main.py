@@ -357,7 +357,9 @@ def search_kb(query):
     if intent == "commands":
         cmds = best_data.get("commands")
         if cmds:
-            return f"Commands for {name}: " + ", ".join([sanitize(c) for c in cmds]) + "."
+            # Format commands as markdown bullet points
+            cmd_list = "\n".join([f"• {sanitize(c)}" for c in cmds])
+            return f"**Commands for {name}:**\n\n{cmd_list}"
         else:
             return f"No command list available for '{name}' in the KB."
 
