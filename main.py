@@ -56,7 +56,7 @@ KB = {
             "access": "@kustchatbot",
             "price": "Free 3-hour trial available for new users",
             "features": [
-                "Autonomous chat generator (not spam - human-like behavioural model)",
+                "Autonomous chat generator (not spam — human-like behavioural model)",
                 "Farms Rains 24/7 without interruptions",
                 "Multi-account support for users managing several Stake accounts",
                 "Works on all Stake servers and mirror links",
@@ -71,21 +71,21 @@ KB = {
                 "3. Enter your real Stake username (CASE-SENSITIVE; must match exactly)",
                 "4. Bot provides an **unpacked extension** (.zip)",
                 "5. Unzip the folder on your PC",
-                "6. Open Chrome -> go to **chrome://extensions**",
+                "6. Open Chrome → go to **chrome://extensions**",
                 "7. Enable **Developer Mode** (top-right)",
                 "8. Click **Load Unpacked** and select the unzipped extension folder",
                 "9. Open Stake.com or any Stake mirror (example: https://stake.com/casino/games/mines)",
-                "10. Open Extensions panel -> enable the Stake Chat Farmer extension",
-                "11. Refresh the Stake page -> a popup appears on the left-hand side",
-                "12. If your trial or subscription is active, you will see **Enable AI** -> click it",
+                "10. Open Extensions panel → enable the Stake Chat Farmer extension",
+                "11. Refresh the Stake page → a popup appears on the left-hand side",
+                "12. If your trial or subscription is active, you will see **Enable AI** → click it",
                 "13. Chat Farmer will begin farming XP/Levels automatically",
-                "14. If trial expired: Open @kustchatbot -> /start -> Buy Subscription",
-                "15. Enter Stake username again -> choose payment method (Crypto or UPI)",
+                "14. If trial expired: Open @kustchatbot → /start → Buy Subscription",
+                "15. Enter Stake username again → choose payment method (Crypto or UPI)",
                 "16. UPI = processed manually; Crypto = processed via automated Val/Oxa Pay",
                 "17. Once payment is confirmed, extension instantly activates"
             ],
             "notes": [
-                "Username must match Stake exactly - incorrect casing -> auto-reject",
+                "Username must match Stake exactly — incorrect casing → auto-reject",
                 "Do not rename extension folder; Chrome will not load it",
                 "Bot also shows a **Hindi setup video** for easy onboarding"
             ]
@@ -110,7 +110,7 @@ KB = {
                 "Video playback support in groups and channels",
                 "Distributed backend: metadata servers, routing servers, playback nodes",
                 "Multi-layer caching for instant replay performance",
-                "Pre-caching when songs are queued -> near-zero wait time",
+                "Pre-caching when songs are queued → near-zero wait time",
                 "Load-balanced playback nodes (each ~10 concurrent VCs)",
                 "RR (Real-time Redirect) stream fetching + fallback yt-dlp pipeline",
                 "Cloudflare Worker event-based routing for stable global performance"
@@ -136,7 +136,7 @@ KB = {
         "custom_bots": {
             "name": "Paid Custom Bots",
             "pricing": (
-                "Simple commands: $2- $5 each. Music bots: $4/mo (Tier 1) up to $20/mo (Tier 3). "
+                "Simple commands: $2–$5 each. Music bots: $4/mo (Tier 1) up to $20/mo (Tier 3). "
                 "Complex systems priced based on features and infrastructure load."
             ),
             "info": (
@@ -233,61 +233,53 @@ def get_session(sid):
 # ----------------------------
 # 4. Tool Implementations
 # ----------------------------
-def _normalize_text(s: str):
-    return re.sub(r"\s+", " ", (s or "").strip()).lower()
-
-
 def search_kb(query):
     """
-    Improved KB search that returns a structured dict (not a JSON string):
-    - Broad queries return a summary of projects.
+    Improved KB search:
+    - Broad queries return summary of projects.
     - Specific queries search by project name, keys, or about_me.
     - Recognizes owner/about queries robustly.
     """
     if not query:
-        return {"status": "error", "reason": "No query provided", "results": []}
+        return "No query provided."
 
-    q = _normalize_text(query)
+    q = query.lower().strip()
 
     # BROAD SEARCH LOGIC
     broad_terms = ["service", "offer", "product", "menu", "list", "available", "what do you do", "services"]
     if any(term in q for term in broad_terms):
-        overview = []
+        summary = {"overview": []}
         for key, data in KB["projects"].items():
-            overview.append({"key": key, "name": data.get("name"), "info": data.get("info") or data.get("features")})
-        return {"status": "ok", "query": query, "type": "overview", "results": overview}
+            summary["overview"].append({"key": key, "name": data.get("name"), "info": data.get("info", None)})
+        return json.dumps(summary, ensure_ascii=False)
 
     # OWNER / ABOUT queries
     owner_terms = ["kust", "owner", "about me", "about kust", "who is kust", "who are you", "about owner", "about_me"]
     if any(term in q for term in owner_terms):
-        return {"status": "ok", "query": query, "type": "about", "results": KB.get("about_me", {})}
+        return json.dumps(KB.get("about_me", {}), ensure_ascii=False)
 
-    # SPECIFIC SEARCH LOGIC (fuzzy-ish)
+    # SPECIFIC SEARCH LOGIC
     results = []
     for key, data in KB["projects"].items():
-        lower_blob = json.dumps(data).lower()
-        if q in key or q in data.get('name', '').lower() or any(w in lower_blob for w in q.split() if w):
+        blob = json.dumps(data).lower()
+        if q in key or q in data.get('name', '').lower() or any(w in blob for w in q.split()):
+            # return a compact JSON-friendly dict
             results.append({"key": key, "data": data})
 
-    # compliance / official checks
-    if "official" in q or "fake" in q or "real" in q or "impersonator" in q:
+    if "official" in q or "fake" in q or "real" in q:
         results.append({"compliance": KB['compliance']})
 
     if not results:
-        # helpful fallback: return a hint and a small search of keys
-        candidates = []
-        for key, data in KB["projects"].items():
-            if any(tok in data.get('name', '').lower() for tok in q.split()):
-                candidates.append(key)
-        return {"status": "ok", "query": query, "type": "no_exact_match", "hint": "No specific record found. Try keywords.", "candidates": candidates}
-
-    return {"status": "ok", "query": query, "type": "matches", "results": results}
-
+        return "No specific record found. Answer based on general Kust knowledge."
+    return json.dumps(results[:5], ensure_ascii=False)
 
 def fetch_telegram_history(limit=None):
     """
     Best-effort: fetch available updates via getUpdates and filter messages from TELEGRAM_CHANNEL_ID.
-    Returns a structured dict (not a string).
+    - Telegram does not provide arbitrary chat-history retrieval via bot API.
+    - This function collects all updates the bot currently has in its update queue (repeatedly),
+      aggregates them and filters for messages matching TELEGRAM_CHANNEL_ID.
+    - limit: optional max number of messages to return (after filtering).
     """
     token = TELEGRAM_BOT_TOKEN
     channel_id = str(TELEGRAM_CHANNEL_ID)
@@ -299,11 +291,11 @@ def fetch_telegram_history(limit=None):
             params = {"offset": offset or None, "limit": 100, "timeout": 0}
             r = requests.get(f"{base}/getUpdates", params=params, timeout=20)
             if r.status_code != 200:
-                return {"status": "error", "reason": f"HTTP error {r.status_code} from Telegram."}
+                return f"HTTP error {r.status_code} from Telegram."
 
             data = r.json()
             if not data.get("ok"):
-                return {"status": "error", "reason": f"Telegram API returned error: {data}"}
+                return f"Telegram API returned error: {data}"
 
             updates = data.get("result", [])
             if not updates:
@@ -320,11 +312,13 @@ def fetch_telegram_history(limit=None):
         # Filter messages relevant to the channel id
         msgs = []
         for u in all_updates:
+            # channel posts can appear as 'channel_post' or 'message'
             msg = u.get("message") or u.get("channel_post") or u.get("edited_message")
             if not msg:
                 continue
             chat = msg.get("chat", {})
             if str(chat.get("id")) == channel_id:
+                # normalize a simple structure
                 msgs.append({
                     "update_id": u.get("update_id"),
                     "message_id": msg.get("message_id"),
@@ -333,14 +327,15 @@ def fetch_telegram_history(limit=None):
                     "text": msg.get("text") or msg.get("caption") or "",
                     "raw": msg
                 })
-
+            # also try matching by chat.username if needed (not typical for channels)
+        # apply limit if requested
         if limit:
             msgs = msgs[:limit]
-
-        return {"status": "ok", "channel_id": channel_id, "found_messages": len(msgs), "messages": msgs}
+        # Return structured JSON string
+        return json.dumps({"channel_id": channel_id, "found_messages": len(msgs), "messages": msgs}, ensure_ascii=False)
     except Exception as e:
         logger.exception("Telegram fetch error")
-        return {"status": "error", "reason": str(e)}
+        return f"Exception while fetching Telegram updates: {str(e)}"
 
 # ----------------------------
 # 5. Core AI Logic (Buffered Streaming with improved tool detection)
@@ -349,7 +344,6 @@ def _find_complete_json(s: str):
     """
     Find the first complete top-level JSON object in the string `s`.
     Returns (json_str, start_index, end_index) or (None, None, None).
-    This implementation is robust to escaped quotes.
     """
     start = s.find('{')
     if start == -1:
@@ -362,7 +356,7 @@ def _find_complete_json(s: str):
         if in_str:
             if escape:
                 escape = False
-            elif ch == '\\':
+            elif ch == '\\\\':
                 escape = True
             elif ch == '"':
                 in_str = False
@@ -376,7 +370,6 @@ def _find_complete_json(s: str):
                 if depth == 0:
                     return s[start:i+1], start, i+1
     return None, None, None
-
 
 def call_inference_stream(messages):
     payload = {
@@ -394,7 +387,7 @@ def call_inference_stream(messages):
 
             buffer_text = ""  # accumulates non-tool content or possible partial JSON
             for line in r.iter_lines():
-                if not line:
+                if not line: 
                     continue
                 line = line.decode('utf-8')
                 
@@ -420,9 +413,6 @@ def call_inference_stream(messages):
                     # Some backends send 'content' directly
                     if not delta and 'content' in chunk_json:
                         delta = chunk_json.get('content', '')
-                    # Some backends put final message in choices[0].get('message', {}).get('content')
-                    if not delta:
-                        delta = chunk_json.get('choices', [{}])[0].get('message', {}).get('content', '') if chunk_json.get('choices') else ''
 
                     if not delta:
                         continue
@@ -449,50 +439,43 @@ def call_inference_stream(messages):
                             buffer_text = after
                             continue
 
-                        # Accept multiple possible keys for tool name and query
-                        tool_name = tool_data.get('tool') or tool_data.get('action') or tool_data.get('tool_name')
-                        query = tool_data.get('query') or tool_data.get('q') or tool_data.get('input')
-
-                        # Normalize tool name for dispatch
-                        tool_name_lower = (tool_name or "").lower() if tool_name else ""
+                        tool_name = tool_data.get("tool")
+                        query = tool_data.get("query")
 
                         # 1. Start Tool (Frontend Animation)
-                        yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name_lower, 'input': query})}\n\n"
+                        yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'input': query})}\n\n"
 
-                        # 2. Execute tool
+                        # 2. Execute tool (simulate small delay to show spinner)
+                        # Keep animation visible for a short moment after tool finishes
                         try:
-                            if tool_name_lower in ("get_info", "getinfo", "get_info", "get_info_tool", "get_info_tool"):
+                            tool_name_lower = (tool_name or "").lower() if tool_name else ""
+                            if tool_name_lower == "get_info" or tool_name_lower == "getinfo":
                                 tool_result = search_kb(query)
                             elif tool_name_lower in ("get_telegram_history", "get_telegram_updates", "tg_history", "telegram_history"):
+                                # fetch from Telegram using raw HTTP Bot API (best-effort)
                                 tool_result = fetch_telegram_history(limit=None)
                             else:
-                                tool_result = {"status": "error", "reason": "Tool not found", "tool": tool_name}
+                                tool_result = "Tool not found."
                         except Exception as e:
-                            tool_result = {"status": "error", "reason": f"Tool execution error: {str(e)}"}
-
-                        # Ensure tool_result is JSON-serializable
-                        try:
-                            tool_result_serializable = tool_result if isinstance(tool_result, dict) else {"result": str(tool_result)}
-                        except Exception:
-                            tool_result_serializable = {"result": str(tool_result)}
+                            tool_result = f"Tool execution error: {str(e)}"
 
                         # small pause to make the tool feel real and keep animation visible
-                        time.sleep(1.0)
+                        time.sleep(1.8)
 
                         # 3. End Tool (Frontend Delete Animation)
                         yield f"data: {json.dumps({'type': 'tool_end', 'result': 'Done'})}\n\n"
 
                         # 4. Recursion with results: feed the original assistant tool call + the tool result back to the model
-                        # Put assistant content as the original JSON tool call string, and user content as a clear TOOL_RESULT JSON blob
                         new_messages = messages + [
                             {"role": "assistant", "content": js},
-                            {"role": "user", "content": f"TOOL_RESULT: {json.dumps(tool_result_serializable, ensure_ascii=False)}"}
+                            {"role": "user", "content": f"TOOL RESULT: {tool_result}"}
                         ]
 
                         # Reset buffer_text to any content after the JSON object
                         buffer_text = after
 
                         # Recurse: continue streaming using the updated messages context
+                        # This will produce additional streamed tokens which we will yield to the client
                         yield from call_inference_stream(new_messages)
                         # After recursion returns, continue processing remaining stream normally
                         continue
@@ -501,7 +484,7 @@ def call_inference_stream(messages):
                         # we hold it back until complete to avoid leaking partial JSON text into the UI.
                         if '{' in buffer_text:
                             # if buffer grows too large without closing braces, flush a portion to avoid memory blow
-                            if len(buffer_text) > 4096:
+                            if len(buffer_text) > 2048:
                                 yield f"data: {json.dumps({'type': 'token', 'content': buffer_text})}\n\n"
                                 buffer_text = ""
                         else:
@@ -572,8 +555,8 @@ HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KUSTX | Support Terminal</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
@@ -634,204 +617,91 @@ HTML_TEMPLATE = """
         <div class="status-box"><div id="status-dot" class="status-indicator live"></div><span id="status-text">System Online</span></div>
         <div class="quick-actions">
             <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Quick Access</div>
-            <button class="action-btn" data-query="What is Kustify Hosting pricing?">💰 Hosting Plans</button>
-            <button class="action-btn" data-query="How do I setup the Stake Chat Farmer?">🤖 Stake Farmer Setup</button>
-            <button class="action-btn" data-query="Show me commands for Frozen Music Bot">🎵 Music Bot Cmds</button>
+            <button class="action-btn" onclick="ask('What is Kustify Hosting pricing?')">💰 Hosting Plans</button>
+            <button class="action-btn" onclick="ask('How do I setup the Stake Chat Farmer?')">🤖 Stake Farmer Setup</button>
+            <button class="action-btn" onclick="ask('Show me commands for Frozen Music Bot')">🎵 Music Bot Cmds</button>
         </div>
-        <div style="margin-top:auto; font-size:0.75rem; color:var(--text-dim);">Session ID: <span id="sess-id" style="font-family:monospace">...</span><br><a href="#" id="reset-link" style="color:var(--accent)">Reset Session</a></div>
+        <div style="margin-top:auto; font-size:0.75rem; color:var(--text-dim);">Session ID: <span id="sess-id" style="font-family:monospace">...</span><br><a href="#" onclick="resetSession()" style="color:var(--accent)">Reset Session</a></div>
     </div>
     <div class="main">
         <div class="chat-container" id="chat">
-            <div class="message"><div class="avatar">BOT</div><div class="bubble"><p><strong>KustX Online.</strong></p><p>I am KustX. How can I help you?</p></div></div>
+            <div class="message"><div class="avatar">🤖</div><div class="bubble"><p><strong>KustX Online.</strong></p><p>I am KustX. How can I help you?</p></div></div>
         </div>
         <div class="input-area">
-            <div class="input-wrapper"><input type="text" id="userInput" placeholder="Type your issue..." autocomplete="off"><button class="send" id="sendBtn">SEND</button></div>
+            <div class="input-wrapper"><input type="text" id="userInput" placeholder="Type your issue..." autocomplete="off"><button class="send" id="sendBtn" onclick="sendMessage()">SEND</button></div>
         </div>
     </div>
 <script>
-(function () {
-  'use strict';
+    const uuid = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
+    let session_id = localStorage.getItem('kust_sid') || uuid();
+    localStorage.setItem('kust_sid', session_id);
+    document.getElementById('sess-id').innerText = session_id.substring(0,8);
+    const chatEl = document.getElementById('chat');
+    const inputEl = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
 
-  // Use only safe ASCII characters in this script to avoid hidden unicode token issues.
-  var uuid = function () { return Math.random().toString(36).substring(2) + Date.now().toString(36); };
-  var session_id = localStorage.getItem('kust_sid') || uuid();
-  localStorage.setItem('kust_sid', session_id);
+    let activeToolEl = null;
 
-  var chatEl = document.getElementById('chat');
-  var inputEl = document.getElementById('userInput');
-  var sendBtn = document.getElementById('sendBtn');
-  var statusDot = document.getElementById('status-dot');
-  var statusText = document.getElementById('status-text');
-  var sessEl = document.getElementById('sess-id');
-  if (sessEl) sessEl.innerText = session_id.substring(0, 8);
-
-  var activeToolEl = null;
-
-  function setBusy(busy) {
-    if (busy) {
-      if (statusDot) statusDot.className = 'status-indicator busy';
-      if (statusText) statusText.innerText = 'Processing...';
-      if (sendBtn) sendBtn.disabled = true;
-      if (inputEl) inputEl.disabled = true;
-    } else {
-      if (statusDot) statusDot.className = 'status-indicator live';
-      if (statusText) statusText.innerText = 'System Online';
-      if (sendBtn) sendBtn.disabled = false;
-      if (inputEl) { inputEl.disabled = false; inputEl.focus(); }
+    function setBusy(busy) {
+        if(busy) { statusDot.className = 'status-indicator busy'; statusText.innerText = 'Processing...'; sendBtn.disabled = true; inputEl.disabled = true; } 
+        else { statusDot.className = 'status-indicator live'; statusText.innerText = 'System Online'; sendBtn.disabled = false; inputEl.disabled = false; inputEl.focus(); }
     }
-  }
-
-  function appendUserMsg(text) {
-    var div = document.createElement('div');
-    div.className = 'message user';
-    var bubbleHtml = '<div class="bubble"></div><div class="avatar">USER</div>';
-    div.innerHTML = bubbleHtml;
-    var bubble = div.querySelector('.bubble');
-    bubble.textContent = text;
-    chatEl.appendChild(div);
-    scrollToBottom();
-  }
-
-  function createBotMsg() {
-    var div = document.createElement('div');
-    div.className = 'message';
-    div.innerHTML = '<div class="avatar">BOT</div><div class="bubble"><div class="thinking"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>';
-    chatEl.appendChild(div);
-    scrollToBottom();
-    return div.querySelector('.bubble');
-  }
-
-  function createToolCard(toolName) {
-    var div = document.createElement('div');
-    div.className = 'tool-card';
-    div.innerHTML = '<div class="tool-spinner"></div> <span>Executing: ' + String(toolName) + '...</span>';
-    try {
-      chatEl.insertBefore(div, chatEl.lastElementChild);
-    } catch (e) {
-      chatEl.appendChild(div);
+    function appendUserMsg(text) {
+        const div = document.createElement('div'); div.className = 'message user'; div.innerHTML = `<div class="bubble">${text}</div><div class="avatar">👤</div>`; chatEl.appendChild(div); scrollToBottom();
     }
-    scrollToBottom();
-    return div;
-  }
+    function createBotMsg() {
+        const div = document.createElement('div'); div.className = 'message'; div.innerHTML = `<div class="avatar">🤖</div><div class="bubble"><div class="thinking"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`; chatEl.appendChild(div); scrollToBottom(); return div.querySelector('.bubble');
+    }
+    function createToolCard(toolName) {
+        const div = document.createElement('div'); div.className = 'tool-card'; div.innerHTML = `<div class="tool-spinner"></div> <span>Executing: ${toolName}...</span>`; 
+        chatEl.insertBefore(div, chatEl.lastElementChild); scrollToBottom(); 
+        return div;
+    }
+    function scrollToBottom() { chatEl.scrollTop = chatEl.scrollHeight; }
 
-  function scrollToBottom() {
-    try { chatEl.scrollTop = chatEl.scrollHeight; } catch (e) {}
-  }
+    async function sendMessage() {
+        const text = inputEl.value.trim(); if(!text) return;
+        inputEl.value = ''; appendUserMsg(text); setBusy(true);
+        const botBubble = createBotMsg();
+        let currentText = ""; let isFirstToken = true;
 
-  async function sendMessage() {
-    if (!inputEl) return;
-    var text = inputEl.value.trim();
-    if (!text) return;
-    inputEl.value = '';
-    appendUserMsg(text);
-    setBusy(true);
-    var botBubble = createBotMsg();
-    var currentText = '';
-    var isFirstToken = true;
+        try {
+            const response = await fetch('/chat/stream', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ message: text, session_id: session_id })
+            });
+            const reader = response.body.getReader(); const decoder = new TextDecoder();
 
-    try {
-      var response = await fetch('/chat/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, session_id: session_id })
-      });
-
-      if (!response || !response.body) {
-        botBubble.innerText = 'Error: no response body';
-        return;
-      }
-
-      var reader = response.body.getReader();
-      var decoder = new TextDecoder();
-
-      while (true) {
-        var _ref = await reader.read();
-        var done = _ref.done;
-        var value = _ref.value;
-        if (done) break;
-        var chunk = decoder.decode(value, { stream: true });
-        var parts = chunk.split('\\n\\n');
-        for (var i = 0; i < parts.length; i++) {
-          var part = parts[i];
-          if (!part) continue;
-          var line = part.trim();
-          if (line.indexOf('data:') !== 0) continue;
-          var jsonPart = line.substring(5).trim();
-          try {
-            var data = JSON.parse(jsonPart);
-            if (data.type === 'tool_start') {
-              activeToolEl = createToolCard(data.input || data.tool || 'tool');
-            } else if (data.type === 'tool_end') {
-              if (activeToolEl) {
-                setTimeout(function () { try { activeToolEl.remove(); } catch (e) {} activeToolEl = null; }, 50);
-              }
-            } else if (data.type === 'token') {
-              if (isFirstToken) { botBubble.innerHTML = ''; isFirstToken = false; }
-              currentText += data.content || '';
-              if (typeof marked !== 'undefined') {
-                botBubble.innerHTML = marked.parse(currentText);
-              } else {
-                botBubble.textContent = currentText;
-              }
-              scrollToBottom();
-            } else if (data.type === 'error') {
-              botBubble.innerHTML = '<span style="color:#ef4444">Error: ' + (data.content || '') + '</span>';
+            while (true) {
+                const { done, value } = await reader.read(); if (done) break;
+                const chunk = decoder.decode(value); const lines = chunk.split('\\n\\n');
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.substring(6));
+                            if (data.type === 'tool_start') {
+                                activeToolEl = createToolCard(data.input || data.tool);
+                            }
+                            if (data.type === 'tool_end') {
+                                // keep a tiny grace so animations look smooth client-side as well
+                                setTimeout(() => { if(activeToolEl) activeToolEl.remove(); activeToolEl = null; }, 50);
+                            }
+                            if (data.type === 'token') {
+                                if (isFirstToken) { botBubble.innerHTML = ''; isFirstToken = false; }
+                                currentText += data.content; botBubble.innerHTML = marked.parse(currentText); scrollToBottom();
+                            }
+                            if (data.type === 'error') botBubble.innerHTML = `<span style="color:#ef4444">Error: ${data.content}</span>`;
+                        } catch (e) {}
+                    }
+                }
             }
-          } catch (err) {
-            // ignore partial parse errors
-            // console.warn('SSE parse', err);
-          }
-        }
-      }
-    } catch (err) {
-      try { botBubble.innerText = 'Connection failed.'; } catch (e) {}
-    } finally {
-      setBusy(false);
+        } catch (err) { botBubble.innerHTML = "Connection failed."; } finally { setBusy(false); }
     }
-  }
-
-  // Expose helper functions explicitly to global so any inline handlers (if present) will work
-  window.kustx_ask = function (q) { if (inputEl) { inputEl.value = q; sendMessage(); } };
-  window.kustx_sendMessage = sendMessage;
-  window.kustx_resetSession = async function () {
-    if (!confirm('Clear chat?')) return;
-    try {
-      await fetch('/api/reset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: session_id })
-      });
-      location.reload();
-    } catch (e) {
-      alert('Reset failed');
-    }
-  };
-
-  // Attach click handlers to quick-action buttons (avoid inline onclick).
-  var quickButtons = document.querySelectorAll('.action-btn');
-  for (var ib = 0; ib < quickButtons.length; ib++) {
-    (function (btn) {
-      var q = btn.getAttribute('data-query');
-      btn.addEventListener('click', function (ev) {
-        if (q) {
-          window.kustx_ask(q);
-          ev.preventDefault();
-        }
-      });
-    })(quickButtons[ib]);
-  }
-
-  // Attach send button and Enter key
-  if (sendBtn) sendBtn.addEventListener('click', function () { sendMessage(); });
-  if (inputEl) inputEl.addEventListener('keypress', function (e) { if (e.key === 'Enter') sendMessage(); });
-
-  // Attach reset link
-  var resetLink = document.getElementById('reset-link');
-  if (resetLink) {
-    resetLink.addEventListener('click', function (ev) { ev.preventDefault(); window.kustx_resetSession(); });
-  }
-
-})();
+    function ask(q) { inputEl.value = q; sendMessage(); }
+    async function resetSession() { if(confirm("Clear chat?")) { await fetch('/api/reset', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({session_id})}); location.reload(); } }
+    inputEl.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
 </script>
 </body>
 </html>
