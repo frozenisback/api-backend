@@ -31,7 +31,7 @@ COUNTRY_CONFIG = {
         "lang": "German (Deutsch) - Street Slang",
         "vibe": "Young German gambler. Uses 'Digga', 'Alter', 'Safe', 'Junge', 'Lost', 'Wyld'. Writes in lowercase mostly.",
         "questions": [
-            "digga was geht heute?", "komplett lost heute...", "jemand am gewinnen?", 
+            "digga was geht heute?", "komplett lost heute...", "jemand am gewinnen?",
             "digga dieser slot ist tot", "alter was ein pech"
         ]
     },
@@ -39,7 +39,7 @@ COUNTRY_CONFIG = {
         "lang": "Turkish (Türkçe)",
         "vibe": "Turkish gambler. Uses 'Abi', 'Kral', 'Hocam', 'Lan' (casually), 'Vallah'. Emotional and loud.",
         "questions": [
-            "abi bu ne ya?", "kral taktik var mı?", "bugün kasa eridi resmen", 
+            "abi bu ne ya?", "kral taktik var mı?", "bugün kasa eridi resmen",
             "vallah battık beyler", "selam beyler durumlar ne"
         ]
     },
@@ -47,7 +47,7 @@ COUNTRY_CONFIG = {
         "lang": "Portuguese (Português - Brazil)",
         "vibe": "Brazilian gambler. Uses 'Mano', 'Velho', 'Nossa', 'Top', 'Zica'. Casual and friendly.",
         "questions": [
-            "e aí mano tudo certo?", "nossa que azar hoje", "alguém forrando?", 
+            "e aí mano tudo certo?", "nossa que azar hoje", "alguém forrando?",
             "hoje tá osso", "bora recuperar galera"
         ]
     },
@@ -55,7 +55,7 @@ COUNTRY_CONFIG = {
         "lang": "Casual English",
         "vibe": "Bored gambler. Uses 'bruh', 'lol', 'rip', 'gg', 'scam', 'dry'. mostly lowercase.",
         "questions": [
-            "yo any huge wins?", "rip my balance lol", "site is so dry rn", 
+            "yo any huge wins?", "rip my balance lol", "site is so dry rn",
             "bruh this game is rigged", "gl everyone"
         ]
     },
@@ -63,7 +63,7 @@ COUNTRY_CONFIG = {
         "lang": "American English",
         "vibe": "US gambler. Uses 'bro', 'dude', 'wild', 'fr', 'no cap', 'bet'.",
         "questions": [
-            "yo what's good chat", "bro i'm down bad", "anyone printing?", 
+            "yo what's good chat", "bro i'm down bad", "anyone printing?",
             "this is wild fr", "let's get it"
         ]
     },
@@ -71,7 +71,7 @@ COUNTRY_CONFIG = {
         "lang": "British English",
         "vibe": "UK Lad. Uses 'mate', 'innit', 'bruv', 'proper', 'dead'.",
         "questions": [
-            "alright lads?", "proper dead today innit", "any luck mates?", 
+            "alright lads?", "proper dead today innit", "any luck mates?",
             "cheers for the luck", "bit quiet yeah?"
         ]
     },
@@ -79,7 +79,7 @@ COUNTRY_CONFIG = {
         "lang": "Tagalog / Taglish",
         "vibe": "Filipino gambler. Uses 'lods', 'pre', 'awit', 'sana all', 'olats'.",
         "questions": [
-            "kamusta mga lods", "awit talo na naman", "sana all nananalo", 
+            "kamusta mga lods", "awit talo na naman", "sana all nananalo",
             "pre ano laro ngayon?", "may swerte ba?"
         ]
     },
@@ -87,7 +87,7 @@ COUNTRY_CONFIG = {
         "lang": "Japanese (Casual/Slang)",
         "vibe": "Japanese gambler. Uses 'maji', 'yabai', 'w', 'kusa', 'gachi'.",
         "questions": [
-            "みんな調子どう？", "まじで勝てんw", "やばい、溶けた...", 
+            "みんな調子どう？", "まじで勝てんw", "やばい、溶けた...",
             "誰か当たりきてる？", "今日はダメかもw"
         ]
     },
@@ -95,7 +95,7 @@ COUNTRY_CONFIG = {
         "lang": "Polish (Polski)",
         "vibe": "Polish gambler. Uses 'kurde', 'siema', 'masakra', 'ja pier...', 'lol'.",
         "questions": [
-            "siema pany jak idzie", "kurde ale lipa dzisiaj", "wygrał ktoś coś?", 
+            "siema pany jak idzie", "kurde ale lipa dzisiaj", "wygrał ktoś coś?",
             "masakra z tym slotem", "powodzenia all"
         ]
     },
@@ -103,7 +103,7 @@ COUNTRY_CONFIG = {
         "lang": "Thai",
         "vibe": "Thai gambler. Uses '555' (laugh), 'sad', 'su su'.",
         "questions": [
-            "วันนี้เป็นไงบ้างครับ", "หมดตัวแล้ว 555", "มีใครบวกบ้าง", 
+            "วันนี้เป็นไงบ้างครับ", "หมดตัวแล้ว 555", "มีใครบวกบ้าง",
             "สู้ๆ นะทุกคน", "วันนี้เงียบจัง"
         ]
     },
@@ -111,7 +111,7 @@ COUNTRY_CONFIG = {
         "lang": "Korean (Casual)",
         "vibe": "Korean gambler. Uses 'zz', 'keke', 'hul', 'shibal' (softly).",
         "questions": [
-            "형님들 오늘 어때요?", "아이고 다 잃었네...", "대박 터진 분?", 
+            "형님들 오늘 어때요?", "아이고 다 잃었네...", "대박 터진 분?",
             "오늘 너무 안되네요 ㅠㅠ", "다들 ㅎㅇㅌ"
         ]
     },
@@ -119,7 +119,7 @@ COUNTRY_CONFIG = {
         "lang": "Russian (Slang)",
         "vibe": "Russian gambler. Uses 'brat', 'blin', 'gg', 'scam', 'zaebal'.",
         "questions": [
-            "ку всем, как оно?", "блин все слил", "есть живые?", 
+            "ку всем, как оно?", "блин все слил", "есть живые?",
             "удачи пацаны", "сегодня не мой день"
         ]
     },
@@ -127,7 +127,7 @@ COUNTRY_CONFIG = {
         "lang": "Vietnamese",
         "vibe": "Vietnamese gambler. Uses 'bac', 'vl', 'vai', 'chan', 'anh em'.",
         "questions": [
-            "chào anh em, nay thế nào", "vãi thật thua hết rồi", "có ai về bờ không", 
+            "chào anh em, nay thế nào", "vãi thật thua hết rồi", "có ai về bờ không",
             "chán quá game hút máu", "chúc ae may mắn"
         ]
     },
@@ -135,7 +135,7 @@ COUNTRY_CONFIG = {
         "lang": "Finnish",
         "vibe": "Finnish gambler. Uses 'moi', 'vittu' (lightly), 'perkele', 'noni'.",
         "questions": [
-            "moi kaikille", "voi ei taas meni rahat", "onko voittoja?", 
+            "moi kaikille", "voi ei taas meni rahat", "onko voittoja?",
             "perkele kun ei osu", "gl kaikille"
         ]
     },
@@ -143,7 +143,7 @@ COUNTRY_CONFIG = {
         "lang": "Spanish (Latam/Spain)",
         "vibe": "Latino gambler. Uses 'tio', 'bro', 'joder', 'no mames', 'vamos'.",
         "questions": [
-            "que tal gente", "hoy perdi todo bro", "alguien ganando?", 
+            "que tal gente", "hoy perdi todo bro", "alguien ganando?",
             "vamos con todo", "mucha suerte"
         ]
     },
@@ -151,7 +151,7 @@ COUNTRY_CONFIG = {
         "lang": "Nigerian Pidgin",
         "vibe": "Naija gambler. Uses 'Abeg', 'How far', 'No wahala', 'Omo', 'Dey', 'Sabi'. Very expressive.",
         "questions": [
-            "how far my people?", "omo i don lose money o", "who dey win for here?", 
+            "how far my people?", "omo i don lose money o", "who dey win for here?",
             "abeg show love na", "this game no dey smile"
         ]
     },
@@ -159,7 +159,7 @@ COUNTRY_CONFIG = {
         "lang": "Arabic (Chat/Arabizi)",
         "vibe": "Arabic gambler. Uses 'shabab', 'wallah', 'haram', 'yallah'.",
         "questions": [
-            "salam shabab keef al hal", "wallah khasirt kul shi", "mabrook lil rabihin", 
+            "salam shabab keef al hal", "wallah khasirt kul shi", "mabrook lil rabihin",
             "yallah nshoof al huth", "wein al nas alyom"
         ]
     },
@@ -175,7 +175,7 @@ COUNTRY_CONFIG = {
         "lang": "Norwegian",
         "vibe": "Norwegian gambler. Uses 'faen', 'uff', 'jaja'.",
         "questions": [
-            "hei folkens", "uff tapte alt i dag", "noen som vinner?", 
+            "hei folkens", "uff tapte alt i dag", "noen som vinner?",
             "lykke til alle", "stille i chatten"
         ]
     },
@@ -183,7 +183,7 @@ COUNTRY_CONFIG = {
         "lang": "Indonesian (Bahasa Gaul)",
         "vibe": "Indo gambler. Uses 'gan', 'bang', 'anjir', 'wkwk', 'rungkad', 'gacor'.",
         "questions": [
-            "halo gan gimana?", "aduh rungkad bos", "mantap yang jp", 
+            "halo gan gimana?", "aduh rungkad bos", "mantap yang jp",
             "sepi amat ya", "gas terus bang"
         ]
     },
@@ -191,7 +191,7 @@ COUNTRY_CONFIG = {
         "lang": "Urdu/English (Roman Urdu)",
         "vibe": "Pakistani street smart gambler. Uses 'Jani', 'Bhai', 'Scene', 'Khair hai', 'Bachao'. Abbr: 'kya', 'n', 'thx'.",
         "questions": [
-            "kya scene hai boys?", "aaj bohot loss hua yaar", "koi jeeta kya aaj?", 
+            "kya scene hai boys?", "aaj bohot loss hua yaar", "koi jeeta kya aaj?",
             "salam bhai log", "maza nahi aa raha aaj"
         ]
     },
@@ -206,7 +206,7 @@ COUNTRY_CONFIG = {
         "lang": "Hinglish (Indian Casual)",
         "vibe": "Authentic Desi gambler. Uses 'Bhai', 'Yaar', 'Arre', 'Mast', 'Sahi hai', 'Lagg gaye'. Casual, uses 'tu' not 'aap'. Abbr: 'kya', 'n', 'h', 'thx'.",
         "questions": [
-            "kya bolti public", "aaj 500 ka loss ho gaya yaar", "koi tips hai kya", 
+            "kya bolti public", "aaj 500 ka loss ho gaya yaar", "koi tips hai kya",
             "bhai log kya scene hai", "sahi hai boss"
         ]
     }
@@ -412,6 +412,41 @@ def add_cors_headers(response):
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return response
 
+# ----------------- New helper: fetch active users list and return usernames -----------------
+def get_active_usernames():
+    """
+    Fetch active users from the fixed auth service endpoint and return a list of
+    sanitized usernames (each starting with '@'). Fail silently (log) and return [] on error.
+    """
+    try:
+        active_url = "https://chat-auth-75bd02aa400a.herokuapp.com/active_users"
+        logger.info("Fetching active users: %s", active_url)
+        res = requests.get(active_url, timeout=5)
+        res.raise_for_status()
+        payload = res.json()
+        users = []
+        for item in payload.get("active_users", []):
+            uname = item.get("username")
+            if not uname:
+                continue
+            uname = uname.strip()
+            if not uname.startswith("@"):
+                uname = "@" + uname
+            users.append(uname)
+        # dedupe while preserving order
+        seen = set()
+        deduped = []
+        for u in users:
+            if u not in seen:
+                seen.add(u)
+                deduped.append(u)
+        logger.info("Active users fetched: %s", deduped)
+        return deduped
+    except Exception as e:
+        logger.warning("Failed to fetch active users: %s", e)
+        return []
+
+# -----------------------------------------------------------------------------------------------
 
 @app.route("/<country_code>", methods=["POST", "GET"])
 def handle_country_request(country_code):
@@ -422,7 +457,7 @@ def handle_country_request(country_code):
 
     country_code = country_code.lower()
     config = COUNTRY_CONFIG.get(country_code)
-    
+
     if not config:
         return jsonify({"error": f"Country code '{country_code}' not supported."}), 404
 
@@ -462,15 +497,23 @@ def handle_country_request(country_code):
 
 
     final_prompt = ""
-    
+
     persona_filled = PERSONA_TEMPLATE.format(
         lang=config["lang"],
         vibe=config["vibe"],
         username=user
     )
 
+    # ----------------- fetch active users and build avoid block -----------------
+    active_usernames = get_active_usernames()
+    avoid_block = ""
+    if active_usernames:
+        # Join with spaces so model sees them as separate tokens/usernames
+        avoid_block = "Avoid tagging or replying to these active users: " + " ".join(active_usernames) + "\n\n"
+    # ---------------------------------------------------------------------------
+
     if action == "analyze":
-        final_prompt = ANALYSIS_PROMPT.format(
+        final_prompt = avoid_block + ANALYSIS_PROMPT.format(
             username=user,
             recent_messages=data.get("recent_messages", ""),
             bot_messages=data.get("bot_messages", "")
@@ -491,7 +534,7 @@ def handle_country_request(country_code):
         mode = data.get("mode", "general_no_tag")
 
         if mode == "inactivity":
-            final_prompt = INACTIVITY_PROMPT.format(
+            final_prompt = avoid_block + INACTIVITY_PROMPT.format(
                 persona=persona_filled,
                 vibe=vibe, topics=topics, behaviour_profile=behaviour,
                 memory=memory, emotional_state=e_state, emotional_word=e_word,
@@ -501,7 +544,7 @@ def handle_country_request(country_code):
             )
 
         elif mode == "mention":
-            final_prompt = MENTION_PROMPT.format(
+            final_prompt = avoid_block + MENTION_PROMPT.format(
                 persona=persona_filled,
                 vibe=vibe, topics=topics, behaviour_profile=behaviour,
                 memory=memory, emotional_state=e_state, emotional_word=e_word,
@@ -514,7 +557,7 @@ def handle_country_request(country_code):
             )
 
         elif mode == "general_tag":
-            final_prompt = GENERAL_TAG_PROMPT.format(
+            final_prompt = avoid_block + GENERAL_TAG_PROMPT.format(
                 persona=persona_filled,
                 vibe=vibe, topics=topics, behaviour_profile=behaviour,
                 memory=memory, emotional_state=e_state, emotional_word=e_word,
@@ -527,8 +570,8 @@ def handle_country_request(country_code):
 
         else:
             rand_q = random.choice(config["questions"])
-            
-            final_prompt = GENERAL_NO_TAG_PROMPT.format(
+
+            final_prompt = avoid_block + GENERAL_NO_TAG_PROMPT.format(
                 persona=persona_filled,
                 vibe=vibe, topics=topics, behaviour_profile=behaviour,
                 memory=memory, emotional_state=e_state, emotional_word=e_word,
